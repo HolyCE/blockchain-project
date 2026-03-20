@@ -30,18 +30,27 @@ const resultRequestSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  // ✅ FIXED: Only required when NOT in draft status
   resultLevel: {
     type: Number,
-    required: true
+    required: function() {
+      return this.status !== 'draft';
+    }
   },
+  // ✅ FIXED: Only required when NOT in draft status
   semester: {
     type: String,
     enum: ['First', 'Second', 'Rain'],
-    required: true
+    required: function() {
+      return this.status !== 'draft';
+    }
   },
+  // ✅ FIXED: Only required when NOT in draft status
   academicSession: {
     type: String,
-    required: true,
+    required: function() {
+      return this.status !== 'draft';
+    },
     match: [/^\d{4}\/\d{4}$/, 'Please enter session in format: YYYY/YYYY']
   },
   
@@ -49,18 +58,19 @@ const resultRequestSchema = new mongoose.Schema({
   courses: [{
     courseCode: {
       type: String,
-      required: true,
       uppercase: true
     },
     courseTitle: {
-      type: String,
-      required: true
+      type: String
     },
     creditUnits: {
       type: Number,
-      required: true,
       min: 1,
       max: 6
+    },
+    course: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Course'
     },
     lecturer: {
       name: String,
@@ -98,7 +108,10 @@ const resultRequestSchema = new mongoose.Schema({
       ref: 'User'
     },
     gradedAt: Date,
-    lecturerComment: String
+    lecturerComment: String,
+    // ✅ ADDED: Blockchain fields for each course
+    blockchainHash: String,
+    blockchainTransactionHash: String
   }],
   
   // Supporting Documents
@@ -140,6 +153,28 @@ const resultRequestSchema = new mongoose.Schema({
     }
   }],
   
+  // ✅ ADDED: Approval Workflow tracking
+  approvalWorkflow: {
+    schoolOfficer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    hod: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    courseAdvisor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    lecturer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    hodApprovalTimestamp: Date,
+    schoolOfficerApprovalTimestamp: Date
+  },
+  
   // Rejection Information
   rejectionReason: String,
   rejectedBy: {
@@ -147,6 +182,26 @@ const resultRequestSchema = new mongoose.Schema({
     ref: 'User'
   },
   rejectedAt: Date,
+  
+  // ✅ ADDED: Blockchain Data storage
+  blockchainData: {
+    committed: {
+      type: Boolean,
+      default: false
+    },
+    commitments: [{
+      courseCode: String,
+      hash: String,
+      transactionHash: String,
+      blockNumber: Number,
+      blockHash: String
+    }],
+    committedAt: Date,
+    committedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    }
+  },
   
   // Final Result
   finalResult: {
@@ -190,5 +245,7 @@ const resultRequestSchema = new mongoose.Schema({
 resultRequestSchema.index({ matricNumber: 1, status: 1 });
 resultRequestSchema.index({ department: 1, status: 1 });
 resultRequestSchema.index({ 'courses.lecturer.userId': 1, status: 1 });
+resultRequestSchema.index({ student: 1, status: 1 });
+resultRequestSchema.index({ 'blockchainData.committed': 1 });
 
 module.exports = mongoose.model('ResultRequest', resultRequestSchema);

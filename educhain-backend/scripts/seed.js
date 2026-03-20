@@ -1,3 +1,4 @@
+// seed.js
 const mongoose = require('mongoose');
 require('dotenv').config();
 const User = require('../src/models/User');
@@ -17,7 +18,7 @@ const seedDatabase = async () => {
     await Course.deleteMany({});
     console.log('🗑️  Cleared existing data');
 
-    // Create Admin user
+    // Create Admin
     const admin = new User({
       firstName: 'Admin',
       lastName: 'User',
@@ -29,9 +30,8 @@ const seedDatabase = async () => {
       staffId: 'ADM001'
     });
     await admin.save();
-    console.log('👑 Created admin user');
 
-    // Create HOD user
+    // HOD
     const hod = new User({
       firstName: 'John',
       lastName: 'Doe',
@@ -44,9 +44,8 @@ const seedDatabase = async () => {
       designation: 'Head of Department'
     });
     await hod.save();
-    console.log('👨‍🏫 Created HOD user');
 
-    // Create Lecturer user
+    // Lecturer
     const lecturer = new User({
       firstName: 'Jane',
       lastName: 'Smith',
@@ -59,9 +58,8 @@ const seedDatabase = async () => {
       designation: 'Senior Lecturer'
     });
     await lecturer.save();
-    console.log('👩‍🏫 Created lecturer user');
 
-    // Create Course Advisor
+    // Course Advisor
     const advisor = new User({
       firstName: 'Robert',
       lastName: 'Johnson',
@@ -74,9 +72,8 @@ const seedDatabase = async () => {
       designation: 'Course Advisor'
     });
     await advisor.save();
-    console.log('📚 Created course advisor user');
 
-    // Create School Officer
+    // School Officer
     const schoolOfficer = new User({
       firstName: 'Sarah',
       lastName: 'Wilson',
@@ -89,121 +86,54 @@ const seedDatabase = async () => {
       designation: 'School Officer'
     });
     await schoolOfficer.save();
-    console.log('🏫 Created school officer user');
 
-    // Create Student user
-    const student = new User({
-      firstName: 'Alice',
-      lastName: 'Williams',
-      email: 'alice.williams@student.university.edu',
-      password: 'student123',
-      role: 'student',
-      matricNumber: 'COM/22/1234',
-      department: 'Computer Science',
-      faculty: 'Science',
-      level: 300,
-      program: 'B.Sc Computer Science'
-    });
-    await student.save();
-    console.log('👩‍🎓 Created student user');
+    // Students
+    const students = [
+      new User({
+        firstName: 'Alice',
+        lastName: 'Williams',
+        email: 'alice.williams@student.university.edu',
+        password: 'student123',
+        role: 'student',
+        matricNumber: 'COM/22/1234',
+        department: 'Computer Science',
+        faculty: 'Science',
+        level: 300,
+        program: 'B.Sc Computer Science'
+      }),
+      new User({
+        firstName: 'Bob',
+        lastName: 'Brown',
+        email: 'bob.brown@student.university.edu',
+        password: 'student123',
+        role: 'student',
+        matricNumber: 'COM/22/1235',
+        department: 'Computer Science',
+        faculty: 'Science',
+        level: 300,
+        program: 'B.Sc Computer Science'
+      })
+    ];
 
-    // Create another Student
-    const student2 = new User({
-      firstName: 'Bob',
-      lastName: 'Brown',
-      email: 'bob.brown@student.university.edu',
-      password: 'student123',
-      role: 'student',
-      matricNumber: 'COM/22/1235',
-      department: 'Computer Science',
-      faculty: 'Science',
-      level: 300,
-      program: 'B.Sc Computer Science'
-    });
-    await student2.save();
-    console.log('👨‍🎓 Created second student user');
+    for (const s of students) await s.save();
 
-    // Create Courses
+    // Courses - multiple departments and levels
     const courses = [
-      {
-        code: 'CSC301',
-        title: 'Data Structures and Algorithms',
-        creditUnits: 3,
-        department: 'Computer Science',
-        faculty: 'Science',
-        level: 300,
-        semester: 'First',
-        lecturers: [{
-          lecturerId: lecturer._id,
-          lecturerName: 'Dr. Jane Smith',
-          isPrimary: true
-        }],
-        courseAdvisor: {
-          userId: advisor._id,
-          name: 'Dr. Robert Johnson'
-        },
-        description: 'Advanced data structures and algorithm analysis'
-      },
-      {
-        code: 'CSC302',
-        title: 'Database Management Systems',
-        creditUnits: 3,
-        department: 'Computer Science',
-        faculty: 'Science',
-        level: 300,
-        semester: 'First',
-        lecturers: [{
-          lecturerId: lecturer._id,
-          lecturerName: 'Dr. Jane Smith',
-          isPrimary: true
-        }],
-        description: 'Introduction to database systems and SQL'
-      },
-      {
-        code: 'CSC303',
-        title: 'Computer Networks',
-        creditUnits: 3,
-        department: 'Computer Science',
-        faculty: 'Science',
-        level: 300,
-        semester: 'Second',
-        lecturers: [{
-          lecturerId: lecturer._id,
-          lecturerName: 'Dr. Jane Smith',
-          isPrimary: true
-        }],
-        description: 'Fundamentals of computer networking'
-      },
-      {
-        code: 'CSC304',
-        title: 'Software Engineering',
-        creditUnits: 3,
-        department: 'Computer Science',
-        faculty: 'Science',
-        level: 300,
-        semester: 'Second',
-        lecturers: [{
-          lecturerId: lecturer._id,
-          lecturerName: 'Dr. Jane Smith',
-          isPrimary: true
-        }],
-        description: 'Software development methodologies and practices'
-      },
-      {
-        code: 'MAT101',
-        title: 'Calculus I',
-        creditUnits: 3,
-        department: 'Mathematics',
-        faculty: 'Science',
-        level: 100,
-        semester: 'First',
-        lecturers: [{
-          lecturerId: lecturer._id,
-          lecturerName: 'Dr. Jane Smith',
-          isPrimary: true
-        }],
-        description: 'Introduction to differential calculus'
-      }
+      // Computer Science 100-400
+      { code: 'CSC101', title: 'Intro to CS', creditUnits: 3, department: 'Computer Science', faculty: 'Science', level: 100, semester: 'First', lecturers: [{ lecturerId: lecturer._id, lecturerName: 'Dr. Jane Smith', isPrimary: true }], courseAdvisor: { userId: advisor._id, name: 'Dr. Robert Johnson' } },
+      { code: 'CSC201', title: 'Algorithms', creditUnits: 3, department: 'Computer Science', faculty: 'Science', level: 200, semester: 'First', lecturers: [{ lecturerId: lecturer._id, lecturerName: 'Dr. Jane Smith', isPrimary: true }] },
+      { code: 'CSC301', title: 'Data Structures', creditUnits: 3, department: 'Computer Science', faculty: 'Science', level: 300, semester: 'First', lecturers: [{ lecturerId: lecturer._id, lecturerName: 'Dr. Jane Smith', isPrimary: true }] },
+      { code: 'CSC401', title: 'Software Engineering', creditUnits: 3, department: 'Computer Science', faculty: 'Science', level: 400, semester: 'Second', lecturers: [{ lecturerId: lecturer._id, lecturerName: 'Dr. Jane Smith', isPrimary: true }] },
+
+      // Mathematics
+      { code: 'MAT101', title: 'Calculus I', creditUnits: 3, department: 'Mathematics', faculty: 'Science', level: 100, semester: 'First', lecturers: [{ lecturerId: lecturer._id, lecturerName: 'Dr. Jane Smith', isPrimary: true }] },
+      { code: 'MAT201', title: 'Linear Algebra', creditUnits: 3, department: 'Mathematics', faculty: 'Science', level: 200, semester: 'Second', lecturers: [{ lecturerId: lecturer._id, lecturerName: 'Dr. Jane Smith', isPrimary: true }] },
+
+      // Physics
+      { code: 'PHY101', title: 'Mechanics', creditUnits: 3, department: 'Physics', faculty: 'Science', level: 100, semester: 'First', lecturers: [{ lecturerId: lecturer._id, lecturerName: 'Dr. Jane Smith', isPrimary: true }] },
+
+      // Engineering
+      { code: 'ENG101', title: 'Intro to Electrical Eng', creditUnits: 3, department: 'Electrical Engineering', faculty: 'Engineering', level: 100, semester: 'First', lecturers: [{ lecturerId: lecturer._id, lecturerName: 'Dr. Jane Smith', isPrimary: true }] }
     ];
 
     for (const courseData of courses) {
@@ -213,8 +143,7 @@ const seedDatabase = async () => {
     }
 
     console.log('\n✅ Database seeding completed!');
-    console.log('\n📋 Login Credentials:');
-    console.log('====================');
+    console.log('\n📋 Sample login credentials:');
     console.log('Admin: admin@university.edu / admin123');
     console.log('HOD: hod@cs.university.edu / hod123');
     console.log('Lecturer: jane.smith@cs.university.edu / lecturer123');
@@ -222,19 +151,15 @@ const seedDatabase = async () => {
     console.log('School Officer: sarah.wilson@university.edu / officer123');
     console.log('Student 1: alice.williams@student.university.edu / student123');
     console.log('Student 2: bob.brown@student.university.edu / student123');
-    console.log('\n🚀 Run: npm run dev to start the server');
-    console.log('🌐 API will be available at: http://localhost:5000');
-    console.log('📊 Health check: http://localhost:5000/api/health');
 
     process.exit(0);
   } catch (error) {
     console.error('❌ Error seeding database:', error.message);
-    console.error('Error stack:', error.stack);
+    console.error(error.stack);
     process.exit(1);
   }
 };
 
-// Handle script termination
 process.on('SIGINT', async () => {
   console.log('\n⚠️  Script terminated by user');
   await mongoose.connection.close();
