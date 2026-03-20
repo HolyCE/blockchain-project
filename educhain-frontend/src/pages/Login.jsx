@@ -71,7 +71,7 @@ const Login = ({ onLogin }) => {
           </form>
 
           <p className="signup-link">
-            Don't have an account? <Link to="/signup">Sign up here</Link>
+            Don't have an account? <Link to="/Signup">Sign up here</Link>
           </p>
         </div>
       </div>

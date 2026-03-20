@@ -30,14 +30,14 @@ const resultRequestSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
-  // ✅ FIXED: Only required when NOT in draft status
+  
   resultLevel: {
     type: Number,
     required: function() {
       return this.status !== 'draft';
     }
   },
-  // ✅ FIXED: Only required when NOT in draft status
+  
   semester: {
     type: String,
     enum: ['First', 'Second', 'Rain'],
@@ -45,7 +45,7 @@ const resultRequestSchema = new mongoose.Schema({
       return this.status !== 'draft';
     }
   },
-  // ✅ FIXED: Only required when NOT in draft status
+  
   academicSession: {
     type: String,
     required: function() {
