@@ -9,23 +9,15 @@ node_modules/
 *.env
 educhain-backend/.env
 educhain-frontend/.env
-
-# Package lock files (optional - many projects commit these, but you can ignore)
-# package-lock.json
-# */package-lock.json
-# **/package-lock.json
-
-# Build outputs
-dist/
-build/
-*/dist/
-*/build/
+!.env.example
 
 # Logs
+logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
 
 # OS files
 .DS_Store
@@ -36,3 +28,58 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+.vscode-test
+
+# Build outputs
+dist/
+build/
+*/dist/
+*/build/
+.next
+out
+.nuxt
+.cache/
+.temp
+.parcel-cache
+.vuepress/dist
+.svelte-kit/
+**/.vitepress/dist
+**/.vitepress/cache
+# public # Uncomment if your project uses Gatsby
+
+# Coverage and test
+coverage
+*.lcov
+.nyc_output
+
+# Diagnostic / runtime
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+pids
+*.pid
+*.seed
+*.pid.lock
+lib-cov
+build/Release
+
+# Misc
+jspm_packages/
+bower_components/
+.lock-wscript
+web_modules/
+*.tsbuildinfo
+.npm
+.eslintcache
+.stylelintcache
+.node_repl_history
+*.tgz
+.yarn/*
+.yarn-integrity
+.serverless/
+.fusebox/
+.dynamodb/
+.firebase/
+.tern-port
+
+# Vite logs
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
