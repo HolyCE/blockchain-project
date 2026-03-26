@@ -5,6 +5,7 @@ import RequestManagement from '../components/RequestManagement';
 import LecturerGrading from '../components/LecturerGrading';
 import StudentDashboard from '../components/StudentDashboard';
 import UploadedResults from '../components/UploadedResults';
+import AdminResults from '../components/AdminResults';
 import API from '../services/api';
 import '../styles/Dashboard.css';
 
@@ -119,6 +120,17 @@ const Dashboard = ({ user, onLogout }) => {
   const getAvailableTabs = () => {
     const tabs = [{ id: 'dashboard', label: 'Dashboard', icon: '📊' }];
     
+    // Admin gets all tabs
+    if (user.role === 'admin') {
+      tabs.push({ id: 'requests', label: 'All Requests', icon: '📋' });
+      tabs.push({ id: 'students', label: 'All Students', icon: '👥' });
+      tabs.push({ id: 'courses', label: 'All Courses', icon: '📚' });
+      tabs.push({ id: 'published-results', label: 'Published Results', icon: '📊' });
+      tabs.push({ id: 'blockchain', label: 'Blockchain Console', icon: '⛓️' });
+      return tabs;
+    }
+    
+    // For non-admin users
     if (user.role !== 'student') {
       tabs.push({ id: 'requests', label: 'Requests', icon: '📋' });
     }
@@ -137,10 +149,6 @@ const Dashboard = ({ user, onLogout }) => {
     
     if (user.role === 'hod' || user.role === 'admin') {
       tabs.push({ id: 'students', label: 'Students', icon: '👥' });
-    }
-    
-    if (user.role === 'admin') {
-      tabs.push({ id: 'blockchain', label: 'Blockchain', icon: '⛓️' });
     }
     
     return tabs;
@@ -189,6 +197,7 @@ const Dashboard = ({ user, onLogout }) => {
                user.role === 'course_advisor' ? 'Course Advisor' : 
                user.role === 'school_officer' ? 'School Officer' :
                user.role === 'lecturer' ? 'Lecturer' :
+               user.role === 'admin' ? 'Administrator' :
                user.role.charAt(0).toUpperCase() + user.role.slice(1)}
             </div>
           </div>
@@ -209,6 +218,7 @@ const Dashboard = ({ user, onLogout }) => {
              activeTab === 'courses' ? 'Courses' :
              activeTab === 'students' ? 'Students' :
              activeTab === 'uploaded' ? 'Uploaded Results' :
+             activeTab === 'published-results' ? 'Published Results Management' :
              activeTab === 'blockchain' ? 'Blockchain Console' : 'Dashboard'}
           </h1>
           
@@ -227,6 +237,7 @@ const Dashboard = ({ user, onLogout }) => {
                    user.role === 'course_advisor' ? 'Course Advisor' : 
                    user.role === 'school_officer' ? 'School Officer' :
                    user.role === 'lecturer' ? 'Lecturer' :
+                   user.role === 'admin' ? 'Administrator' :
                    user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                 </div>
               </div>
@@ -236,6 +247,7 @@ const Dashboard = ({ user, onLogout }) => {
           </div>
         </div>
 
+        {/* Dashboard Tab */}
         {activeTab === 'dashboard' && (
           <>
             {user.role === 'student' && (
@@ -334,18 +346,27 @@ const Dashboard = ({ user, onLogout }) => {
           </>
         )}
 
+        {/* Requests Tab */}
         {activeTab === 'requests' && (
           <RequestManagement userRole={user.role} userId={user.id} />
         )}
 
+        {/* Grading Tab */}
         {activeTab === 'grading' && user.role === 'lecturer' && (
           <LecturerGrading userId={user.id} />
         )}
 
+        {/* Uploaded Results Tab */}
         {activeTab === 'uploaded' && user.role === 'student' && (
           <UploadedResults userId={user.id} />
         )}
 
+        {/* Published Results Tab (Admin Only) */}
+        {activeTab === 'published-results' && user.role === 'admin' && (
+          <AdminResults />
+        )}
+
+        {/* Courses Tab */}
         {activeTab === 'courses' && user.role !== 'school_officer' && (
           <div className="courses-section">
             <h3>Courses</h3>
@@ -363,6 +384,7 @@ const Dashboard = ({ user, onLogout }) => {
           </div>
         )}
 
+        {/* Students Tab */}
         {activeTab === 'students' && (user.role === 'hod' || user.role === 'admin') && (
           <div className="students-section">
             <div className="section-header">
@@ -431,6 +453,7 @@ const Dashboard = ({ user, onLogout }) => {
           </div>
         )}
 
+        {/* Blockchain Tab (Admin Only) */}
         {activeTab === 'blockchain' && user.role === 'admin' && (
           <div className="blockchain-section">
             <h3>Blockchain Status</h3>

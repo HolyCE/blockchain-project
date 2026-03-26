@@ -1,0 +1,299 @@
+import React, { useState, useEffect } from 'react';
+import Sidebar from '../components/Sidebar';
+import StatCard from '../components/StatCard';
+import RequestManagement from '../components/RequestManagement';
+import LecturerGrading from '../components/LecturerGrading';
+import StudentDashboard from '../components/StudentDashboard';
+import UploadedResults from '../components/UploadedResults';
+import AdminResults from '../components/AdminResults';
+import API from '../services/api';
+import '../styles/Dashboard.css';
+
+const Dashboard = ({ user, onLogout }) => {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [dashboardData, setDashboardData] = useState(null);
+  const [requests, setRequests] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [blockchainStatus, setBlockchainStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [levelFilter, setLevelFilter] = useState('all');
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  const loadDashboardData = async () => {
+    setLoading(true);
+    try {
+      const statsData = await API.getDashboardStats();
+      setDashboardData(statsData);
+      
+      if (user.role === 'student') {
+        setRequests(await API.getStudentRequests());
+        setCourses(await API.getDepartmentCourses(user.department, user.level));
+      } else if (user.role === 'lecturer') {
+        setRequests(await API.getLecturerPendingRequests());
+        setCourses(await API.getLecturerCourses());
+      } else if (user.role === 'hod') {
+        setRequests(await API.getHODPendingRequests());
+        const departmentStudents = await API.getDepartmentStudents(user.department);
+        setStudents(departmentStudents);
+        setCourses(await API.getDepartmentCourses(user.department));
+      } else if (user.role === 'course_advisor') {
+        setRequests(await API.getAdvisorPendingRequests());
+        setCourses(await API.getDepartmentCourses(user.department));
+      } else if (user.role === 'school_officer') {
+        setRequests(await API.getSchoolOfficerPendingRequests());
+        setCourses([]);
+        setStudents([]);
+      } else if (user.role === 'admin') {
+        setRequests(await API.getAdminRequests());
+        setStudents(await API.getAllStudents());
+        setCourses(await API.getAllCourses());
+      }
+      
+      const notifData = await API.getNotifications(true);
+      setNotifications(notifData.notifications || []);
+      
+      const bcStatus = await API.getBlockchainStatus();
+      setBlockchainStatus(bcStatus);
+      
+    } catch (error) {
+      console.error('Error loading dashboard:', error);
+    }
+    setLoading(false);
+  };
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setMobileMenuOpen(false);
+  };
+
+  const handleLogout = () => {
+    onLogout();
+    setMobileMenuOpen(false);
+  };
+
+  const exportStudentsToCSV = () => {
+    const filtered = getFilteredStudents();
+    const headers = ['S/N', 'Name', 'Matric Number', 'Level', 'Email', 'Phone', 'Status'];
+    const rows = filtered.map((student, index) => [
+      index + 1,
+      student.fullName || `${student.firstName} ${student.lastName}`,
+      student.matricNumber,
+      student.level,
+      student.email,
+      student.phoneNumber || '-',
+      student.isActive ? 'Active' : 'Inactive'
+    ]);
+    
+    const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${user.department || 'all'}_students.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const getFilteredStudents = () => {
+    return students.filter(student => {
+      const matchesSearch = searchTerm === '' || 
+        (student.fullName || `${student.firstName} ${student.lastName}`).toLowerCase().includes(searchTerm.toLowerCase()) ||
+        student.matricNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        student.email?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesLevel = levelFilter === 'all' || student.level === parseInt(levelFilter);
+      
+      return matchesSearch && matchesLevel;
+    });
+  };
+
+  const filteredStudents = getFilteredStudents();
+  const stats = dashboardData?.stats || {};
+
+  const getAvailableTabs = () => {
+    const tabs = [{ id: 'dashboard', label: 'Dashboard', icon: '📊' }];
+    
+    // Admin gets all tabs
+    if (user.role === 'admin') {
+      tabs.push({ id: 'requests', label: 'All Requests', icon: '📋' });
+      tabs.push({ id: 'students', label: 'All Students', icon: '👥' });
+      tabs.push({ id: 'courses', label: 'All Courses', icon: '📚' });
+      tabs.push({ id: 'published-results', label: 'Published Results', icon: '📊' });
+      tabs.push({ id: 'blockchain', label: 'Blockchain Console', icon: '⛓️' });
+      return tabs;
+    }
+    
+    // Student
+    if (user.role === 'student') {
+      tabs.push({ id: 'uploaded', label: 'My Results', icon: '📄' });
+      return tabs;
+    }
+    
+    // Lecturer
+    if (user.role === 'lecturer') {
+      tabs.push({ id: 'grading', label: 'Grading', icon: '✏️' });
+      tabs.push({ id: 'courses', label: 'My Courses', icon: '📚' });
+      return tabs;
+    }
+    
+    // HOD
+    if (user.role === 'hod') {
+      tabs.push({ id: 'requests', label: 'Department Requests', icon: '📋' });
+      tabs.push({ id: 'students', label: 'Department Students', icon: '👥' });
+      tabs.push({ id: 'courses', label: 'Department Courses', icon: '📚' });
+      return tabs;
+    }
+    
+    // Course Advisor
+    if (user.role === 'course_advisor') {
+      tabs.push({ id: 'requests', label: 'Pending Reviews', icon: '📋' });
+      tabs.push({ id: 'courses', label: 'Department Courses', icon: '📚' });
+      return tabs;
+    }
+    
+    // School Officer
+    if (user.role === 'school_officer') {
+      tabs.push({ id: 'requests', label: 'Pending Approvals', icon: '📋' });
+      return tabs;
+    }
+    
+    return tabs;
+  };
+
+  if (loading) return (
+    <div className="loading-screen">
+      <div className="spinner"></div>
+      <p>Loading dashboard...</p>
+    </div>
+  );
+
+  return (
+    <div className="app-container">
+      <div className="mobile-header">
+        <div className="mobile-logo" onClick={() => handleTabChange('dashboard')}>
+          <span className="logo-icon">🎓</span>
+          <strong>EDU</strong>CHAIN
+        </div>
+        <button 
+          className={`mobile-menu-btn ${mobileMenuOpen ? 'active' : ''}`}
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        >
+          <span className="hamburger-line"></span>
+          <span className="hamburger-line"></span>
+          <span className="hamburger-line"></span>
+        </button>
+      </div>
+
+      <div className={`mobile-dashboard-menu ${mobileMenuOpen ? 'open' : ''}`}>
+        <div className="mobile-menu-content">
+          {getAvailableTabs().map(tab => (
+            <button 
+              key={tab.id}
+              className={`mobile-nav-item ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => handleTabChange(tab.id)}
+            >
+              {tab.icon} {tab.label}
+            </button>
+          ))}
+          <div className="mobile-user-info">
+            <div className="mobile-user-name">{user.name}</div>
+            <div className="mobile-user-role">Administrator</div>
+          </div>
+          <button className="mobile-logout-btn" onClick={handleLogout}>Logout</button>
+        </div>
+      </div>
+
+      <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} userRole={user.role} />
+      
+      <div className="main-content">
+        <div className="header">
+          <h1>
+            {activeTab === 'dashboard' ? 'Dashboard' :
+             activeTab === 'requests' ? 'Request Management' :
+             activeTab === 'grading' ? 'Grading Tasks' :
+             activeTab === 'courses' ? 'Courses' :
+             activeTab === 'students' ? 'Students' :
+             activeTab === 'uploaded' ? 'Uploaded Results' :
+             activeTab === 'published-results' ? 'Published Results Management' :
+             activeTab === 'blockchain' ? 'Blockchain Console' : 'Dashboard'}
+          </h1>
+          
+          <div className="header-right">
+            <div className="user-profile">
+              <div className="user-info">
+                <div className="user-name">{user.name}</div>
+                <div className="user-role">Administrator</div>
+              </div>
+            </div>
+            <button className="logout-btn" onClick={handleLogout}>Logout</button>
+          </div>
+        </div>
+
+        {activeTab === 'dashboard' && (
+          <div className="stats-grid">
+            <StatCard label="Total Students" value={students.length} subtext="All departments" color="#3b82f6" />
+            <StatCard label="Total Courses" value={courses.length} subtext="Active courses" color="#8b5cf6" />
+            <StatCard label="Total Requests" value={stats.totalRequests || 0} subtext={`${stats.pendingRequests || 0} pending`} color="#f59e0b" />
+            <StatCard label="Blockchain" value={blockchainStatus?.connected ? "Connected" : "Offline"} subtext={blockchainStatus?.connected ? "Active" : "Check Ganache"} color={blockchainStatus?.connected ? "#10b981" : "#ef4444"} />
+          </div>
+        )}
+
+        {activeTab === 'requests' && (
+          <RequestManagement userRole={user.role} userId={user.id} />
+        )}
+
+        {activeTab === 'students' && user.role === 'admin' && (
+          <div className="students-section">
+            <h3>All Students</h3>
+            <div className="students-list">
+              {students.slice(0, 20).map(student => (
+                <div key={student._id} className="student-card">
+                  <div className="student-name">{student.fullName || `${student.firstName} ${student.lastName}`}</div>
+                  <div className="student-details">{student.matricNumber} • {student.email}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'courses' && user.role === 'admin' && (
+          <div className="courses-section">
+            <h3>All Courses</h3>
+            <div className="courses-grid">
+              {courses.slice(0, 20).map(course => (
+                <div key={course.code} className="course-card">
+                  <div className="course-code">{course.code}</div>
+                  <div className="course-title">{course.title}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'published-results' && user.role === 'admin' && (
+          <AdminResults />
+        )}
+
+        {activeTab === 'blockchain' && user.role === 'admin' && (
+          <div className="blockchain-section">
+            <h3>Blockchain Status</h3>
+            <div className={`blockchain-status-card ${blockchainStatus?.connected ? 'connected' : 'disconnected'}`}>
+              <div className="status-indicator">
+                {blockchainStatus?.connected ? '🟢 Connected' : '🔴 Disconnected'}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;

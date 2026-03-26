@@ -4,6 +4,7 @@ import StatCard from '../components/StatCard';
 import RequestManagement from '../components/RequestManagement';
 import LecturerGrading from '../components/LecturerGrading';
 import StudentDashboard from '../components/StudentDashboard';
+import UploadedResults from '../components/UploadedResults';
 import API from '../services/api';
 import '../styles/Dashboard.css';
 
@@ -122,6 +123,10 @@ const Dashboard = ({ user, onLogout }) => {
       tabs.push({ id: 'requests', label: 'Requests', icon: '📋' });
     }
     
+    if (user.role === 'student') {
+      tabs.push({ id: 'uploaded', label: 'Uploaded Results', icon: '📄' });
+    }
+    
     if (user.role === 'lecturer') {
       tabs.push({ id: 'grading', label: 'Grading', icon: '✏️' });
     }
@@ -150,7 +155,6 @@ const Dashboard = ({ user, onLogout }) => {
 
   return (
     <div className="app-container">
-      {/* Mobile Header */}
       <div className="mobile-header">
         <div className="mobile-logo" onClick={() => handleTabChange('dashboard')}>
           <span className="logo-icon">🎓</span>
@@ -167,7 +171,6 @@ const Dashboard = ({ user, onLogout }) => {
         </button>
       </div>
 
-      {/* Mobile Dropdown Menu */}
       <div className={`mobile-dashboard-menu ${mobileMenuOpen ? 'open' : ''}`}>
         <div className="mobile-menu-content">
           {getAvailableTabs().map(tab => (
@@ -195,7 +198,6 @@ const Dashboard = ({ user, onLogout }) => {
         </div>
       </div>
 
-      {/* Desktop Sidebar */}
       <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} userRole={user.role} />
       
       <div className="main-content">
@@ -206,6 +208,7 @@ const Dashboard = ({ user, onLogout }) => {
              activeTab === 'grading' ? 'Grading Tasks' :
              activeTab === 'courses' ? 'Courses' :
              activeTab === 'students' ? 'Students' :
+             activeTab === 'uploaded' ? 'Uploaded Results' :
              activeTab === 'blockchain' ? 'Blockchain Console' : 'Dashboard'}
           </h1>
           
@@ -233,10 +236,8 @@ const Dashboard = ({ user, onLogout }) => {
           </div>
         </div>
 
-        {/* Dashboard Tab */}
         {activeTab === 'dashboard' && (
           <>
-            {/* Student Dashboard */}
             {user.role === 'student' && (
               <StudentDashboard 
                 user={user} 
@@ -246,7 +247,6 @@ const Dashboard = ({ user, onLogout }) => {
               />
             )}
 
-            {/* Stats for other roles */}
             {user.role !== 'student' && (
               <div className="stats-grid">
                 {user.role === 'lecturer' && (
@@ -259,7 +259,7 @@ const Dashboard = ({ user, onLogout }) => {
                 
                 {user.role === 'hod' && (
                   <>
-                    <StatCard label="Department Requests" value={requests.length} subtext={`Pending review`} color="#f59e0b" />
+                    <StatCard label="Department Requests" value={requests.length} subtext="Pending review" color="#f59e0b" />
                     <StatCard label="Department Students" value={students.length} subtext="Active students" color="#3b82f6" />
                     <StatCard label="Department Courses" value={courses.length} subtext="Active courses" color="#8b5cf6" />
                     <StatCard label="Completion Rate" value={`${stats.completionRate || 0}%`} subtext="Department average" color="#10b981" />
@@ -294,7 +294,6 @@ const Dashboard = ({ user, onLogout }) => {
               </div>
             )}
 
-            {/* Quick Actions */}
             {(user.role === 'school_officer' || user.role === 'hod' || user.role === 'course_advisor') && requests.length > 0 && (
               <div className="quick-actions">
                 <div className="quick-action-card">
@@ -335,17 +334,18 @@ const Dashboard = ({ user, onLogout }) => {
           </>
         )}
 
-        {/* Requests Tab */}
         {activeTab === 'requests' && (
           <RequestManagement userRole={user.role} userId={user.id} />
         )}
 
-        {/* Grading Tab */}
         {activeTab === 'grading' && user.role === 'lecturer' && (
           <LecturerGrading userId={user.id} />
         )}
 
-        {/* Courses Section */}
+        {activeTab === 'uploaded' && user.role === 'student' && (
+          <UploadedResults userId={user.id} />
+        )}
+
         {activeTab === 'courses' && user.role !== 'school_officer' && (
           <div className="courses-section">
             <h3>Courses</h3>
@@ -363,7 +363,6 @@ const Dashboard = ({ user, onLogout }) => {
           </div>
         )}
 
-        {/* Students Section */}
         {activeTab === 'students' && (user.role === 'hod' || user.role === 'admin') && (
           <div className="students-section">
             <div className="section-header">
@@ -404,50 +403,34 @@ const Dashboard = ({ user, onLogout }) => {
             {filteredStudents.length === 0 ? (
               <p className="no-data">No students found</p>
             ) : (
-              <div className="students-table-container">
-                <table className="students-table">
-                  <thead>
-                    <tr>
-                      <th>S/N</th>
-                      <th>Name</th>
-                      <th>Matric Number</th>
-                      <th>Level</th>
-                      <th>Email</th>
-                      <th>Phone</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredStudents.map((student, index) => (
-                      <tr key={student._id}>
-                        <td>{index + 1}</td>
-                        <td>
-                          <div className="student-name">
-                            <div className="name-initial">{student.firstName?.[0]}{student.lastName?.[0]}</div>
-                            <span>{student.fullName || `${student.firstName} ${student.lastName}`}</span>
-                          </div>
-                        </td>
-                        <td><strong>{student.matricNumber}</strong></td>
-                        <td>
-                          <span className="level-badge">Level {student.level}</span>
-                        </td>
-                        <td>{student.email}</td>
-                        <td>{student.phoneNumber || '-'}</td>
-                        <td>
-                          <span className={`status-badge ${student.isActive ? 'active' : 'inactive'}`}>
-                            {student.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="students-list">
+                {filteredStudents.map((student, index) => (
+                  <div key={student._id} className="student-card">
+                    <div className="student-rank">{index + 1}</div>
+                    <div className="student-info">
+                      <div className="student-name">
+                        <div className="name-initial">{student.firstName?.[0]}{student.lastName?.[0]}</div>
+                        <span>{student.fullName || `${student.firstName} ${student.lastName}`}</span>
+                      </div>
+                      <div className="student-details">
+                        <span className="student-matric">{student.matricNumber}</span>
+                        <span className="student-level">Level {student.level}</span>
+                        <span className="student-email">{student.email}</span>
+                        <span className="student-phone">{student.phoneNumber || '-'}</span>
+                      </div>
+                    </div>
+                    <div className="student-status">
+                      <span className={`status-badge ${student.isActive ? 'active' : 'inactive'}`}>
+                        {student.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
         )}
 
-        {/* Blockchain Section */}
         {activeTab === 'blockchain' && user.role === 'admin' && (
           <div className="blockchain-section">
             <h3>Blockchain Status</h3>

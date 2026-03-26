@@ -75,6 +75,38 @@ const API = {
     }
   },
 
+  // ========== NOTIFICATIONS ==========
+  getNotifications: async (unreadOnly = false) => {
+    try {
+      const url = unreadOnly ? '/notifications?unread=true' : '/notifications';
+      const response = await apiClient.get(url);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+      return { notifications: [], total: 0 };
+    }
+  },
+
+  markNotificationAsRead: async (notificationId) => {
+    try {
+      const response = await apiClient.put(`/notifications/${notificationId}/read`);
+      return response.data;
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      throw error;
+    }
+  },
+
+  markAllNotificationsAsRead: async () => {
+    try {
+      const response = await apiClient.put('/notifications/read-all');
+      return response.data;
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+      throw error;
+    }
+  },
+
   // ========== RESULT REQUESTS ==========
   getStudentRequests: async () => {
     try {
@@ -353,3 +385,46 @@ const API = {
 };
 
 export default API;
+
+  // ========== ADMIN RESULTS MANAGEMENT ==========
+  getCompletedRequests: async () => {
+    try {
+      const response = await apiClient.get('/result-requests/admin/completed');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching completed requests:', error);
+      return { requests: [] };
+    }
+  },
+
+  publishResultToBlockchain: async (requestId) => {
+    try {
+      const response = await apiClient.post(`/result-requests/${requestId}/publish-blockchain`);
+      return response.data;
+    } catch (error) {
+      console.error('Error publishing to blockchain:', error);
+      throw error;
+    }
+  },
+
+  verifyResultOnBlockchain: async (studentId, courseCode, score, grade, timestamp) => {
+    try {
+      const response = await apiClient.post('/blockchain/verify', {
+        studentId, courseCode, score, grade, timestamp
+      });
+      return response.data.verified;
+    } catch (error) {
+      console.error('Error verifying on blockchain:', error);
+      return false;
+    }
+  },
+
+  getBlockchainTransactions: async (requestId) => {
+    try {
+      const response = await apiClient.get(`/result-requests/${requestId}/blockchain-tx`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching blockchain transactions:', error);
+      return null;
+    }
+  }

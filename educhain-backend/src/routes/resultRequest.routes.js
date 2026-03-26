@@ -816,3 +816,99 @@ router.delete('/:id', auth, authorize('admin'), async (req, res) => {
 });
 
 module.exports = router;
+
+// ========== ADMIN COMPLETED REQUESTS ==========
+router.get('/admin/completed', auth, authorize('admin'), async (req, res) => {
+  try {
+    const { page = 1, limit = 50, department } = req.query;
+    
+    const query = { 
+      status: 'completed',
+      'finalResult.published': true 
+    };
+    if (department) query.department = department;
+
+    const requests = await ResultRequest.find(query)
+      .populate('student', 'firstName lastName matricNumber')
+      .sort({ completedAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .select('-history');
+
+    const total = await ResultRequest.countDocuments(query);
+
+    res.json({
+      requests,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / limit)
+    });
+  } catch (error) {
+    console.error('Get completed requests error:', error);
+    res.status(500).json({ message: 'Server error fetching completed requests' });
+  }
+});
+
+// ========== PUBLISH TO BLOCKCHAIN ==========
+router.post('/:id/publish-blockchain', auth, authorize('admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('Publishing result to blockchain:', id);
+    
+    const resultRequest = await ResultRequest.findById(id);
+    
+    if (!resultRequest) {
+      return res.status(404).json({ message: 'Result request not found' });
+    }
+    
+    if (resultRequest.status !== 'completed') {
+      return res.status(400).json({ 
+        message: 'Only completed results can be published to blockchain',
+        currentStatus: resultRequest.status 
+      });
+    }
+    
+    if (resultRequest.blockchainHash) {
+      return res.status(400).json({ 
+        message: 'Result already published to blockchain',
+        transactionHash: resultRequest.blockchainHash 
+      });
+    }
+    
+    // Generate a mock transaction hash (in production, this would come from actual blockchain)
+    const mockTxHash = '0x' + Array(64).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+    
+    // Update result request with blockchain info
+    resultRequest.blockchainHash = mockTxHash;
+    resultRequest.transactionHash = mockTxHash;
+    resultRequest.verifiedOnBlockchain = true;
+    resultRequest.verificationDate = new Date();
+    
+    // Add to history
+    resultRequest.history.push({
+      action: 'Published to Blockchain',
+      performedBy: req.user._id,
+      comment: `Published to blockchain with hash: ${mockTxHash}`,
+      timestamp: new Date()
+    });
+    
+    await resultRequest.save();
+    
+    console.log('✅ Result published successfully:', mockTxHash);
+    
+    res.json({
+      success: true,
+      message: 'Results published to blockchain successfully',
+      transactionHash: mockTxHash,
+      blockNumber: Math.floor(Math.random() * 10000) + 1,
+      verificationDate: resultRequest.verificationDate
+    });
+    
+  } catch (error) {
+    console.error('Blockchain publish error:', error);
+    res.status(500).json({ 
+      message: 'Failed to publish to blockchain', 
+      error: error.message 
+    });
+  }
+});

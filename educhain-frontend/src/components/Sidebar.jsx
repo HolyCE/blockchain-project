@@ -2,66 +2,85 @@ import React from 'react';
 import '../styles/Sidebar.css';
 
 const Sidebar = ({ activeTab, setActiveTab, userRole }) => {
-  const menuItems = {
-    lecturer: [
-      { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-      { id: 'grading', icon: '✏️', label: 'Grading Tasks' }
-    ],
-    student: [
-      { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-      { id: 'uploaded', icon: '📄', label: 'Uploaded Results' },
-      { id: 'courses', icon: '📚', label: 'My Courses' },
-      { id: 'requests', icon: '📋', label: 'My Requests' }
-    ],
-    course_advisor: [
-      { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-      { id: 'requests', icon: '📋', label: 'Pending Approvals' },
-      { id: 'courses', icon: '📚', label: 'Department Courses' }
-    ],
-    hod: [
-      { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-      { id: 'requests', icon: '📋', label: 'Pending Approvals' },
-      { id: 'courses', icon: '📚', label: 'All Courses' },
-      { id: 'students', icon: '👥', label: 'Students' }
-    ],
-    school_officer: [
-      { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-      { id: 'requests', icon: '📋', label: 'Pending Requests' }
-    ],
-    admin: [
-      { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-      { id: 'requests', icon: '📋', label: 'All Requests' },
-      { id: 'courses', icon: '📚', label: 'All Courses' },
-      { id: 'students', icon: '👥', label: 'Students' },
-      { id: 'blockchain', icon: '⛓️', label: 'Blockchain' }
-    ]
+  const getNavItems = () => {
+    if (userRole === 'admin') {
+      return [
+        { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+        { id: 'requests', label: 'All Requests', icon: '📋' },
+        { id: 'students', label: 'All Students', icon: '👥' },
+        { id: 'courses', label: 'All Courses', icon: '📚' },
+        { id: 'published-results', label: 'Published Results', icon: '📊' },
+        { id: 'blockchain', label: 'Blockchain Console', icon: '⛓️' }
+      ];
+    }
+    
+    if (userRole === 'student') {
+      return [
+        { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+        { id: 'uploaded', label: 'My Results', icon: '📄' }
+      ];
+    }
+    
+    if (userRole === 'lecturer') {
+      return [
+        { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+        { id: 'grading', label: 'Grading Tasks', icon: '✏️' },
+        { id: 'courses', label: 'My Courses', icon: '📚' }
+      ];
+    }
+    
+    if (userRole === 'hod') {
+      return [
+        { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+        { id: 'requests', label: 'Department Requests', icon: '📋' },
+        { id: 'students', label: 'Department Students', icon: '👥' },
+        { id: 'courses', label: 'Department Courses', icon: '📚' }
+      ];
+    }
+    
+    if (userRole === 'course_advisor') {
+      return [
+        { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+        { id: 'requests', label: 'Pending Reviews', icon: '📋' },
+        { id: 'courses', label: 'Department Courses', icon: '📚' }
+      ];
+    }
+    
+    if (userRole === 'school_officer') {
+      return [
+        { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+        { id: 'requests', label: 'Pending Approvals', icon: '📋' }
+      ];
+    }
+    
+    return [{ id: 'dashboard', label: 'Dashboard', icon: '📊' }];
   };
-
-  const items = menuItems[userRole] || menuItems.lecturer;
-
+  
+  const navItems = getNavItems();
+  
   return (
     <div className="sidebar">
-      <div className="sidebar-header">
-        <div className="logo">
-          <strong>EDU</strong>CHAIN
-        </div>
+      <div className="sidebar-logo">
+        <span className="logo-icon">🎓</span>
+        <span className="logo-text">EDUCHAIN</span>
       </div>
       
       <nav className="sidebar-nav">
-        <div className="nav-section">
-          <div className="nav-label">MAIN MENU</div>
-          {items.map(item => (
-            <button
-              key={item.id}
-              className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(item.id)}
-            >
-              {item.icon && <span className="nav-icon">{item.icon}</span>}
-              <span className="nav-text">{item.label}</span>
-            </button>
-          ))}
-        </div>
+        {navItems.map(item => (
+          <button
+            key={item.id}
+            className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
+            onClick={() => setActiveTab(item.id)}
+          >
+            <span className="nav-icon">{item.icon}</span>
+            <span className="nav-label">{item.label}</span>
+          </button>
+        ))}
       </nav>
+      
+      <div className="sidebar-footer">
+        <div className="sidebar-version">v1.0.0</div>
+      </div>
     </div>
   );
 };
