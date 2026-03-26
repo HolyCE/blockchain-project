@@ -9,6 +9,16 @@ const AdminResults = () => {
   const [selectedResult, setSelectedResult] = useState(null);
   const [publishing, setPublishing] = useState(null);
   const [toasts, setToasts] = useState([]);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const addToast = (message, type = 'success') => {
     const id = Date.now();
@@ -149,18 +159,62 @@ const AdminResults = () => {
         <div className="results-table-wrapper">
           <table className="results-table-enhanced">
             <thead>
-              <tr><th>Student</th><th>Matric Number</th><th>Department</th><th>Session</th><th>GPA</th><th>Status</th><th>Actions</th></tr>
+              <tr>
+                <th>Student</th>
+                {!isMobile && <th>Matric Number</th>}
+                <th>Department</th>
+                <th>Session</th>
+                <th>GPA</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
             </thead>
             <tbody>
               {results.map(result => (
                 <tr key={result._id}>
-                  <td><div className="student-cell"><div className="student-avatar">{result.studentName?.charAt(0) || 'S'}</div><div className="student-name">{result.studentName}</div></div></td>
-                  <td className="matric">{result.matricNumber}</td>
+                  <td>
+                    <div className="student-cell">
+                      <div className="student-avatar">{result.studentName?.charAt(0) || 'S'}</div>
+                      <div className="student-name">{result.studentName}</div>
+                      {isMobile && <div className="student-matric-mobile">{result.matricNumber}</div>}
+                    </div>
+                  </td>
+                  {!isMobile && <td className="matric">{result.matricNumber}</td>}
                   <td>{result.department}</td>
-                  <td>{result.academicSession}<br/><small>{result.semester} Semester</small></td>
-                  <td><span className="gpa-badge-enhanced" style={{ background: getGPAColor(result.finalResult?.gpa) }}>{result.finalResult?.gpa || 'N/A'}</span></td>
-                  <td>{result.blockchainHash ? <span className="status-badge published">✅ Published</span> : <span className="status-badge pending">⏳ Pending</span>}</td>
-                  <td><div className="action-buttons"><button className="btn-view" onClick={() => setSelectedResult(result)}>👁️ View</button>{!result.blockchainHash && <button className="btn-publish" onClick={() => publishToBlockchain(result._id)} disabled={publishing === result._id}>{publishing === result._id ? '⏳ Publishing...' : '📤 Publish'}</button>}</div></td>
+                  <td>
+                    {result.academicSession}<br/>
+                    <small>{result.semester} Semester</small>
+                  </td>
+                  <td>
+                    <span className="gpa-badge-enhanced" style={{ background: getGPAColor(result.finalResult?.gpa) }}>
+                      {result.finalResult?.gpa || 'N/A'}
+                    </span>
+                  </td>
+                  <td>
+                    {result.blockchainHash ? (
+                      <span className="status-badge published" title={result.blockchainHash}>
+                        ✅ Published
+                      </span>
+                    ) : (
+                      <span className="status-badge pending">⏳ Pending</span>
+                    )}
+                  </td>
+                  <td>
+                    <div className="action-buttons">
+                      <button className="btn-view" onClick={() => setSelectedResult(result)}>
+                        👁️ View
+                      </button>
+                      {!result.blockchainHash && (
+                        <button 
+                          className="btn-publish"
+                          onClick={() => publishToBlockchain(result._id)}
+                          disabled={publishing === result._id}
+                        >
+                          {publishing === result._id ? '⏳ Publishing...' : '📤 Publish'}
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -168,17 +222,61 @@ const AdminResults = () => {
         </div>
       )}
 
+      {/* Modal remains the same */}
       {selectedResult && (
         <div className="modal-overlay" onClick={() => setSelectedResult(null)}>
           <div className="modal-content-enhanced" onClick={e => e.stopPropagation()}>
-            <div className="modal-header"><h3>📄 Result Details</h3><button className="modal-close" onClick={() => setSelectedResult(null)}>×</button></div>
-            <div className="modal-body">
-              <div className="student-info-card"><div className="info-row"><span className="info-label">Student:</span><span className="info-value">{selectedResult.studentName}</span></div><div className="info-row"><span className="info-label">Matric Number:</span><span className="info-value">{selectedResult.matricNumber}</span></div><div className="info-row"><span className="info-label">Department:</span><span className="info-value">{selectedResult.department}</span></div><div className="info-row"><span className="info-label">Session:</span><span className="info-value">{selectedResult.academicSession} - {selectedResult.semester} Semester</span></div></div>
-              <h4>📚 Course Results</h4>
-              <table className="courses-table-enhanced"><thead><tr><th>Course Code</th><th>Course Title</th><th>Credits</th><th>Score</th><th>Grade</th><th>GP</th></tr></thead><tbody>{selectedResult.courses?.map((c, i) => (<tr key={i}><td><strong>{c.courseCode}</strong></td><td>{c.courseTitle}</td><td>{c.creditUnits}</td><td>{c.score || 'N/A'}</td><td><span className="grade-badge">{c.grade || 'N/A'}</span></td><td>{c.gradePoint || 'N/A'}</td></tr>))}</tbody><tfoot><tr className="total-row"><td colSpan="2"><strong>Total Credits:</strong></td><td><strong>{selectedResult.finalResult?.totalCredits}</strong></td><td colSpan="2"><strong>GPA:</strong></td><td><strong className="gpa-large">{selectedResult.finalResult?.gpa}</strong></td></tr></tfoot></table>
-              {selectedResult.blockchainHash && (<div className="blockchain-info-card"><div className="blockchain-header">🔗 Blockchain Verification</div><div className="blockchain-details"><p><strong>Transaction Hash:</strong></p><code className="hash-code">{selectedResult.blockchainHash}</code><p><strong>Published:</strong> {new Date(selectedResult.verificationDate).toLocaleString()}</p></div></div>)}
+            <div className="modal-header">
+              <h3>📄 Result Details</h3>
+              <button className="modal-close" onClick={() => setSelectedResult(null)}>×</button>
             </div>
-            <div className="modal-footer"><button className="btn-close-modal" onClick={() => setSelectedResult(null)}>Close</button></div>
+            <div className="modal-body">
+              <div className="student-info-card">
+                <div className="info-row"><span className="info-label">Student:</span><span className="info-value">{selectedResult.studentName}</span></div>
+                <div className="info-row"><span className="info-label">Matric Number:</span><span className="info-value">{selectedResult.matricNumber}</span></div>
+                <div className="info-row"><span className="info-label">Department:</span><span className="info-value">{selectedResult.department}</span></div>
+                <div className="info-row"><span className="info-label">Session:</span><span className="info-value">{selectedResult.academicSession} - {selectedResult.semester} Semester</span></div>
+              </div>
+              <h4>📚 Course Results</h4>
+              <div className="courses-table-wrapper">
+                <table className="courses-table-enhanced">
+                  <thead><tr><th>Course Code</th><th>Title</th><th>Credits</th><th>Score</th><th>Grade</th><th>GP</th></tr></thead>
+                  <tbody>
+                    {selectedResult.courses?.map((c, i) => (
+                      <tr key={i}>
+                        <td><strong>{c.courseCode}</strong></td>
+                        <td>{c.courseTitle}</td>
+                        <td>{c.creditUnits}</td>
+                        <td>{c.score || 'N/A'}</td>
+                        <td><span className="grade-badge">{c.grade || 'N/A'}</span></td>
+                        <td>{c.gradePoint || 'N/A'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="total-row">
+                      <td colSpan="2"><strong>Total Credits:</strong></td>
+                      <td><strong>{selectedResult.finalResult?.totalCredits}</strong></td>
+                      <td colSpan="2"><strong>GPA:</strong></td>
+                      <td><strong className="gpa-large">{selectedResult.finalResult?.gpa}</strong></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              {selectedResult.blockchainHash && (
+                <div className="blockchain-info-card">
+                  <div className="blockchain-header">🔗 Blockchain Verification</div>
+                  <div className="blockchain-details">
+                    <p><strong>Transaction Hash:</strong></p>
+                    <code className="hash-code">{selectedResult.blockchainHash}</code>
+                    <p><strong>Published:</strong> {new Date(selectedResult.verificationDate).toLocaleString()}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn-close-modal" onClick={() => setSelectedResult(null)}>Close</button>
+            </div>
           </div>
         </div>
       )}
