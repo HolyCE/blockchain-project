@@ -9,16 +9,6 @@ const AdminResults = () => {
   const [selectedResult, setSelectedResult] = useState(null);
   const [publishing, setPublishing] = useState(null);
   const [toasts, setToasts] = useState([]);
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-
-  // Detect mobile screen size
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   const addToast = (message, type = 'success') => {
     const id = Date.now();
@@ -161,7 +151,7 @@ const AdminResults = () => {
             <thead>
               <tr>
                 <th>Student</th>
-                {!isMobile && <th>Matric Number</th>}
+                <th>Matric Number</th>
                 <th>Department</th>
                 <th>Session</th>
                 <th>GPA</th>
@@ -171,22 +161,24 @@ const AdminResults = () => {
             </thead>
             <tbody>
               {results.map(result => (
-                <tr key={result._id}>
+                <tr key={result._id} className={!result.blockchainHash ? 'pending-row' : ''}>
                   <td>
                     <div className="student-cell">
                       <div className="student-avatar">{result.studentName?.charAt(0) || 'S'}</div>
                       <div className="student-name">{result.studentName}</div>
-                      {isMobile && <div className="student-matric-mobile">{result.matricNumber}</div>}
                     </div>
                   </td>
-                  {!isMobile && <td className="matric">{result.matricNumber}</td>}
+                  <td className="matric">{result.matricNumber}</td>
                   <td>{result.department}</td>
                   <td>
                     {result.academicSession}<br/>
                     <small>{result.semester} Semester</small>
                   </td>
                   <td>
-                    <span className="gpa-badge-enhanced" style={{ background: getGPAColor(result.finalResult?.gpa) }}>
+                    <span 
+                      className="gpa-badge-enhanced" 
+                      style={{ background: getGPAColor(result.finalResult?.gpa) }}
+                    >
                       {result.finalResult?.gpa || 'N/A'}
                     </span>
                   </td>
@@ -201,7 +193,10 @@ const AdminResults = () => {
                   </td>
                   <td>
                     <div className="action-buttons">
-                      <button className="btn-view" onClick={() => setSelectedResult(result)}>
+                      <button 
+                        className="btn-view"
+                        onClick={() => setSelectedResult(result)}
+                      >
                         👁️ View
                       </button>
                       {!result.blockchainHash && (
@@ -222,7 +217,7 @@ const AdminResults = () => {
         </div>
       )}
 
-      {/* Modal remains the same */}
+      {/* Modal for Details */}
       {selectedResult && (
         <div className="modal-overlay" onClick={() => setSelectedResult(null)}>
           <div className="modal-content-enhanced" onClick={e => e.stopPropagation()}>
@@ -232,15 +227,37 @@ const AdminResults = () => {
             </div>
             <div className="modal-body">
               <div className="student-info-card">
-                <div className="info-row"><span className="info-label">Student:</span><span className="info-value">{selectedResult.studentName}</span></div>
-                <div className="info-row"><span className="info-label">Matric Number:</span><span className="info-value">{selectedResult.matricNumber}</span></div>
-                <div className="info-row"><span className="info-label">Department:</span><span className="info-value">{selectedResult.department}</span></div>
-                <div className="info-row"><span className="info-label">Session:</span><span className="info-value">{selectedResult.academicSession} - {selectedResult.semester} Semester</span></div>
+                <div className="info-row">
+                  <span className="info-label">Student:</span>
+                  <span className="info-value">{selectedResult.studentName}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Matric Number:</span>
+                  <span className="info-value">{selectedResult.matricNumber}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Department:</span>
+                  <span className="info-value">{selectedResult.department}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Session:</span>
+                  <span className="info-value">{selectedResult.academicSession} - {selectedResult.semester} Semester</span>
+                </div>
               </div>
+
               <h4>📚 Course Results</h4>
               <div className="courses-table-wrapper">
                 <table className="courses-table-enhanced">
-                  <thead><tr><th>Course Code</th><th>Title</th><th>Credits</th><th>Score</th><th>Grade</th><th>GP</th></tr></thead>
+                  <thead>
+                    <tr>
+                      <th>Course Code</th>
+                      <th>Course Title</th>
+                      <th>Credits</th>
+                      <th>Score</th>
+                      <th>Grade</th>
+                      <th>GP</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {selectedResult.courses?.map((c, i) => (
                       <tr key={i}>
@@ -263,6 +280,7 @@ const AdminResults = () => {
                   </tfoot>
                 </table>
               </div>
+
               {selectedResult.blockchainHash && (
                 <div className="blockchain-info-card">
                   <div className="blockchain-header">🔗 Blockchain Verification</div>
@@ -275,7 +293,9 @@ const AdminResults = () => {
               )}
             </div>
             <div className="modal-footer">
-              <button className="btn-close-modal" onClick={() => setSelectedResult(null)}>Close</button>
+              <button className="btn-close-modal" onClick={() => setSelectedResult(null)}>
+                Close
+              </button>
             </div>
           </div>
         </div>
