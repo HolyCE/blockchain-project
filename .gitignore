@@ -11,9 +11,6 @@ educhain-backend/.env
 educhain-frontend/.env
 
 # Package lock files (optional - many projects commit these, but you can ignore)
-# package-lock.json
-# */package-lock.json
-# **/package-lock.json
 
 # Build outputs
 dist/

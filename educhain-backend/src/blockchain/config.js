@@ -1,91 +1,80 @@
-const Web3 = require('web3');
-const crypto = require('crypto');
+let Web3;
+try {
+  Web3 = require('web3');
+} catch (error) {
+  console.warn('⚠️ Web3 not installed, blockchain features will be disabled');
+  Web3 = null;
+}
 
-class BlockchainService {
+class BlockchainConfig {
   constructor() {
-    try {
-      this.web3 = new Web3('http://127.0.0.1:7545');
-      console.log('🔗 Blockchain service initialized');
-    } catch (error) {
-      console.error('❌ Failed to initialize blockchain:', error.message);
-      this.web3 = null;
-    }
+    this.web3 = null;
+    this.contract = null;
+    this.initialized = false;
   }
 
-  async init() {
-    if (!this.web3) {
-      console.error('❌ Web3 not initialized');
+  async initialize() {
+    if (!Web3) {
+      console.warn('⚠️ Web3 library not available, blockchain features disabled');
+      this.initialized = false;
       return false;
     }
+
     try {
-      const accounts = await this.web3.eth.getAccounts();
-      console.log(`✅ Connected to Ganache. Accounts: ${accounts.length}`);
-      return true;
+      const rpcUrl = process.env.BLOCKCHAIN_RPC_URL || 'http://127.0.0.1:7545';
+      
+      // For local Ganache, use HTTP provider
+      if (rpcUrl.includes('127.0.0.1') || rpcUrl.includes('localhost')) {
+        this.web3 = new Web3(new Web3.providers.HttpProvider(rpcUrl));
+      } else {
+        this.web3 = new Web3(rpcUrl);
+      }
+      
+      // Test connection (don't fail if not connected)
+      try {
+        const isListening = await this.web3.eth.net.isListening();
+        if (isListening) {
+          console.log('✅ Blockchain connected:', rpcUrl);
+          this.initialized = true;
+        } else {
+          console.warn('⚠️ Blockchain not responding, but continuing without it');
+          this.initialized = false;
+        }
+      } catch (err) {
+        console.warn('⚠️ Cannot connect to blockchain:', err.message);
+        this.initialized = false;
+      }
+      
+      // Load contract if address exists
+      if (process.env.BLOCKCHAIN_CONTRACT_ADDRESS && this.web3) {
+        console.log('📝 Contract address configured:', process.env.BLOCKCHAIN_CONTRACT_ADDRESS);
+      }
+      
+      return this.initialized;
     } catch (error) {
-      console.error('❌ Failed to connect to Ganache:', error.message);
+      console.warn('⚠️ Blockchain initialization failed:', error.message);
+      this.initialized = false;
       return false;
     }
   }
 
-  hashResult(resultData) {
-    const dataString = JSON.stringify(resultData);
-    return crypto.createHash('sha256').update(dataString).digest('hex');
+  getWeb3() {
+    return this.web3;
   }
 
-  async storeResultHash(resultId, studentId, studentName, courses, gpa, semester, academicSession) {
-    if (!this.web3) {
-      return { success: false, error: 'Web3 not initialized' };
-    }
-    try {
-      const accounts = await this.web3.eth.getAccounts();
-      const defaultAccount = accounts[0];
-      
-      const resultRecord = {
-        resultId,
-        studentId,
-        studentName,
-        courses: courses.map(c => ({
-          code: c.courseCode,
-          grade: c.grade,
-          score: c.score,
-          credits: c.creditUnits
-        })),
-        gpa,
-        semester,
-        academicSession,
-        timestamp: Date.now(),
-        hash: this.hashResult({ resultId, studentId, courses, gpa, semester, academicSession })
-      };
-      
-      const transaction = {
-        from: defaultAccount,
-        to: defaultAccount,
-        data: this.web3.utils.utf8ToHex(JSON.stringify(resultRecord)),
-        gas: 6721975,
-        gasPrice: this.web3.utils.toWei('20', 'gwei')
-      };
-
-      const receipt = await this.web3.eth.sendTransaction(transaction);
-      
-      return {
-        success: true,
-        transactionHash: receipt.transactionHash,
-        blockHash: receipt.blockHash,
-        blockNumber: receipt.blockNumber,
-        resultHash: resultRecord.hash
-      };
-    } catch (error) {
-      console.error('❌ Blockchain transaction failed:', error);
-      return { success: false, error: error.message };
-    }
+  getContract() {
+    return this.contract;
   }
 
-  async verifyResult(resultId, storedHash) {
-    return {
-      isValid: true,
-      message: 'Result verified on blockchain - No tampering detected'
-    };
+  isInitialized() {
+    return this.initialized;
   }
 }
 
-module.exports = new BlockchainService();
+// Export a singleton instance
+const blockchainConfig = new BlockchainConfig();
+
+// Initialize immediately but don't block startup
+blockchainConfig.initialize().catch(console.error);
+
+module.exports = blockchainConfig;
