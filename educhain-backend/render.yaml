@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: educhain-backend
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: BLOCKCHAIN_RPC_URL
+        value: http://your-ganache-ip:7545
+      - key: BLOCKCHAIN_PRIVATE_KEY
+        sync: false
+      - key: FRONTEND_URL
+        value: https://your-netlify-app.netlify.app

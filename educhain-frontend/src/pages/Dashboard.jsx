@@ -1,160 +1,335 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import StatCard from '../components/StatCard';
-import ResultTable from '../components/ResultTable';
 import RequestManagement from '../components/RequestManagement';
+import LecturerGrading from '../components/LecturerGrading';
 import StudentDashboard from '../components/StudentDashboard';
+import UploadedResults from '../components/UploadedResults';
 import API from '../services/api';
 import '../styles/Dashboard.css';
 
 const Dashboard = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [stats, setStats] = useState(null);
-  const [courseData, setCourseData] = useState(null);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [requests, setRequests] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [students, setStudents] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [blockchainStatus, setBlockchainStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [levelFilter, setLevelFilter] = useState('all');
 
   useEffect(() => {
     loadDashboardData();
-    loadNotifications();
   }, []);
 
   const loadDashboardData = async () => {
+    setLoading(true);
     try {
       const statsData = await API.getDashboardStats();
-      setStats(statsData);
+      setDashboardData(statsData);
       
-      // Load course data based on role
-      if (user.role === 'lecturer') {
-        const courses = await API.getLecturerCourses();
-        if (courses.length > 0) {
-          // Load first course's results
-          const results = await API.getCourseResults(courses[0].code);
-          setCourseData(results);
-        }
+      if (user.role === 'student') {
+        setRequests(await API.getStudentRequests());
+        setCourses(await API.getDepartmentCourses(user.department, user.level));
+      } else if (user.role === 'lecturer') {
+        setRequests(await API.getLecturerPendingRequests());
+        setCourses(await API.getLecturerCourses());
+      } else if (user.role === 'hod') {
+        setRequests(await API.getHODPendingRequests());
+        const departmentStudents = await API.getDepartmentStudents(user.department);
+        setStudents(departmentStudents);
+        setCourses(await API.getDepartmentCourses(user.department));
+      } else if (user.role === 'course_advisor') {
+        setRequests(await API.getAdvisorPendingRequests());
+        setCourses(await API.getDepartmentCourses(user.department));
+      } else if (user.role === 'school_officer') {
+        setRequests(await API.getSchoolOfficerPendingRequests());
+        setCourses([]);
+        setStudents([]);
+      } else if (user.role === 'admin') {
+        setRequests(await API.getAdminRequests());
+        setStudents(await API.getAllStudents());
+        setCourses(await API.getAllCourses());
       }
+      
+      const notifData = await API.getNotifications(true);
+      setNotifications(notifData.notifications || []);
+      
+      const bcStatus = await API.getBlockchainStatus();
+      setBlockchainStatus(bcStatus);
+      
     } catch (error) {
       console.error('Error loading dashboard:', error);
     }
+    setLoading(false);
   };
 
-  const loadNotifications = async () => {
-    try {
-      const data = await API.getNotifications(true);
-      setNotifications(data.notifications);
-    } catch (error) {
-      console.error('Error loading notifications:', error);
-    }
-  };
-
-  const handleCommitToBlockchain = async (results) => {
-    const confirmed = window.confirm('Commit these results to the blockchain? This action cannot be undone.');
-    if (confirmed) {
-      try {
-        const result = await API.commitToBlockchain(courseData.courseCode, results);
-        alert(`Successfully committed to blockchain!\nBlock: ${result.blockHash}`);
-        loadDashboardData();
-      } catch (error) {
-        alert('Failed to commit to blockchain');
-      }
-    }
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setMobileMenuOpen(false);
   };
 
   const handleLogout = () => {
-    API.logout();
     onLogout();
+    setMobileMenuOpen(false);
   };
+
+  const exportStudentsToCSV = () => {
+    const filtered = getFilteredStudents();
+    const headers = ['S/N', 'Name', 'Matric Number', 'Level', 'Email', 'Phone', 'Status'];
+    const rows = filtered.map((student, index) => [
+      index + 1,
+      student.fullName || `${student.firstName} ${student.lastName}`,
+      student.matricNumber,
+      student.level,
+      student.email,
+      student.phoneNumber || '-',
+      student.isActive ? 'Active' : 'Inactive'
+    ]);
+    
+    const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${user.department || 'all'}_students.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const getFilteredStudents = () => {
+    return students.filter(student => {
+      const matchesSearch = searchTerm === '' || 
+        (student.fullName || `${student.firstName} ${student.lastName}`).toLowerCase().includes(searchTerm.toLowerCase()) ||
+        student.matricNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        student.email?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesLevel = levelFilter === 'all' || student.level === parseInt(levelFilter);
+      
+      return matchesSearch && matchesLevel;
+    });
+  };
+
+  const filteredStudents = getFilteredStudents();
+  const stats = dashboardData?.stats || {};
+
+  const getAvailableTabs = () => {
+    const tabs = [{ id: 'dashboard', label: 'Dashboard', icon: '📊' }];
+    
+    if (user.role !== 'student') {
+      tabs.push({ id: 'requests', label: 'Requests', icon: '📋' });
+    }
+    
+    if (user.role === 'student') {
+      tabs.push({ id: 'uploaded', label: 'Uploaded Results', icon: '📄' });
+    }
+    
+    if (user.role === 'lecturer') {
+      tabs.push({ id: 'grading', label: 'Grading', icon: '✏️' });
+    }
+    
+    if (user.role !== 'school_officer' && user.role !== 'admin') {
+      tabs.push({ id: 'courses', label: 'Courses', icon: '📚' });
+    }
+    
+    if (user.role === 'hod' || user.role === 'admin') {
+      tabs.push({ id: 'students', label: 'Students', icon: '👥' });
+    }
+    
+    if (user.role === 'admin') {
+      tabs.push({ id: 'blockchain', label: 'Blockchain', icon: '⛓️' });
+    }
+    
+    return tabs;
+  };
+
+  if (loading) return (
+    <div className="loading-screen">
+      <div className="spinner"></div>
+      <p>Loading dashboard...</p>
+    </div>
+  );
 
   return (
     <div className="app-container">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} userRole={user.role} />
+      <div className="mobile-header">
+        <div className="mobile-logo" onClick={() => handleTabChange('dashboard')}>
+          <span className="logo-icon">🎓</span>
+          <strong>EDU</strong>CHAIN
+        </div>
+        <button 
+          className={`mobile-menu-btn ${mobileMenuOpen ? 'active' : ''}`}
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label="Toggle menu"
+        >
+          <span className="hamburger-line"></span>
+          <span className="hamburger-line"></span>
+          <span className="hamburger-line"></span>
+        </button>
+      </div>
+
+      <div className={`mobile-dashboard-menu ${mobileMenuOpen ? 'open' : ''}`}>
+        <div className="mobile-menu-content">
+          {getAvailableTabs().map(tab => (
+            <button 
+              key={tab.id}
+              className={`mobile-nav-item ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => handleTabChange(tab.id)}
+            >
+              {tab.icon} {tab.label}
+            </button>
+          ))}
+          <div className="mobile-user-info">
+            <div className="mobile-user-name">{user.name}</div>
+            <div className="mobile-user-role">
+              {user.role === 'hod' ? 'Head of Department' : 
+               user.role === 'course_advisor' ? 'Course Advisor' : 
+               user.role === 'school_officer' ? 'School Officer' :
+               user.role === 'lecturer' ? 'Lecturer' :
+               user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+            </div>
+          </div>
+          <button className="mobile-logout-btn" onClick={handleLogout}>
+            Logout
+          </button>
+        </div>
+      </div>
+
+      <Sidebar activeTab={activeTab} setActiveTab={handleTabChange} userRole={user.role} />
       
       <div className="main-content">
         <div className="header">
           <h1>
-            {activeTab === 'dashboard' ? 'Dashboard Overview' :
+            {activeTab === 'dashboard' ? 'Dashboard' :
              activeTab === 'requests' ? 'Request Management' :
-             activeTab === 'courses' ? 'Course Management' :
-             activeTab === 'students' ? 'Student Management' :
-             activeTab === 'results' ? 'Results Management' : 'Dashboard'}
+             activeTab === 'grading' ? 'Grading Tasks' :
+             activeTab === 'courses' ? 'Courses' :
+             activeTab === 'students' ? 'Students' :
+             activeTab === 'uploaded' ? 'Uploaded Results' :
+             activeTab === 'blockchain' ? 'Blockchain Console' : 'Dashboard'}
           </h1>
           
           <div className="header-right">
             {notifications.length > 0 && (
-              <button className="notification-btn" onClick={() => setActiveTab('notifications')}>
+              <button className="notification-btn" onClick={() => handleTabChange('notifications')}>
                 🔔 {notifications.length}
               </button>
             )}
             
             <div className="user-profile">
-              <img 
-                src={user.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email}`} 
-                alt="User" 
-              />
               <div className="user-info">
                 <div className="user-name">{user.name}</div>
-                <div className="user-role" style={{ textTransform: 'capitalize' }}>
+                <div className="user-role">
                   {user.role === 'hod' ? 'Head of Department' : 
-                   user.role === 'course_advisor' ? 'Course Advisor' : user.role}
+                   user.role === 'course_advisor' ? 'Course Advisor' : 
+                   user.role === 'school_officer' ? 'School Officer' :
+                   user.role === 'lecturer' ? 'Lecturer' :
+                   user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                 </div>
               </div>
             </div>
             
-            <button className="logout-btn" onClick={handleLogout}>
-              Logout
-            </button>
+            <button className="logout-btn" onClick={handleLogout}>Logout</button>
           </div>
         </div>
 
-        {activeTab === 'dashboard' && stats && (
+        {activeTab === 'dashboard' && (
           <>
-            {user.role === 'student' ? (
+            {user.role === 'student' && (
               <StudentDashboard 
                 user={user} 
-                stats={stats.stats} 
+                stats={stats} 
+                courses={courses} 
                 onRequestSubmitted={loadDashboardData}
               />
-            ) : (
-              <>
-                <div className="stats-grid">
-                  <StatCard 
-                    label="Total Students" 
-                    value={stats.stats?.totalStudents || 0} 
-                    subtext="Active enrollments"
-                    color="#3b82f6"
-                  />
-                  <StatCard 
-                    label="Active Courses" 
-                    value={stats.stats?.totalCourses || 0} 
-                    subtext="Current semester"
-                    color="#8b5cf6"
-                  />
-                  <StatCard 
-                    label="Results Published" 
-                    value={stats.stats?.completedRequests || 0} 
-                    subtext="This semester"
-                    color="#10b981"
-                  />
-                  <StatCard 
-                    label="Pending Requests" 
-                    value={stats.stats?.pendingRequests || 0} 
-                    subtext="Awaiting action"
-                    color="#f59e0b"
-                  />
-                </div>
+            )}
 
-                {user.role === 'lecturer' && courseData && (
-                  <div className="content-grid" style={{ gridTemplateColumns: '1fr', padding: '0 32px' }}>
-                    <div className="content-main">
-                      <ResultTable 
-                        courseData={courseData} 
-                        userRole={user.role}
-                        requestId="current"
-                        onGradesSubmitted={loadDashboardData}
-                      />
-                    </div>
-                  </div>
+            {user.role !== 'student' && (
+              <div className="stats-grid">
+                {user.role === 'lecturer' && (
+                  <>
+                    <StatCard label="Pending Grading" value={requests.length} subtext={`${courses.length} assigned courses`} color="#f59e0b" />
+                    <StatCard label="My Courses" value={courses.length} subtext="Assigned to teach" color="#8b5cf6" />
+                    <StatCard label="Completed Grading" value={stats.totalGraded || 0} subtext={`${stats.completionRate || 0}% complete`} color="#10b981" />
+                  </>
                 )}
-              </>
+                
+                {user.role === 'hod' && (
+                  <>
+                    <StatCard label="Department Requests" value={requests.length} subtext="Pending review" color="#f59e0b" />
+                    <StatCard label="Department Students" value={students.length} subtext="Active students" color="#3b82f6" />
+                    <StatCard label="Department Courses" value={courses.length} subtext="Active courses" color="#8b5cf6" />
+                    <StatCard label="Completion Rate" value={`${stats.completionRate || 0}%`} subtext="Department average" color="#10b981" />
+                  </>
+                )}
+                
+                {user.role === 'course_advisor' && (
+                  <>
+                    <StatCard label="Pending Review" value={requests.length} subtext="Awaiting assignment" color="#f59e0b" />
+                    <StatCard label="Department Courses" value={courses.length} subtext="Active courses" color="#8b5cf6" />
+                    <StatCard label="Auto-Assigned" value={stats.autoAssigned || 0} subtext="Courses assigned" color="#10b981" />
+                  </>
+                )}
+                
+                {user.role === 'school_officer' && (
+                  <>
+                    <StatCard label="Pending Requests" value={requests.length} subtext="Awaiting review" color="#f59e0b" />
+                    <StatCard label="Total Processed" value={stats.totalProcessed || 0} subtext="This semester" color="#10b981" />
+                    <StatCard label="Active Students" value={stats.totalStudents || 0} subtext="Across departments" color="#3b82f6" />
+                    <StatCard label="Review Rate" value={`${stats.reviewRate || 0}%`} subtext="Completion rate" color="#8b5cf6" />
+                  </>
+                )}
+                
+                {user.role === 'admin' && (
+                  <>
+                    <StatCard label="Total Students" value={students.length} subtext="All departments" color="#3b82f6" />
+                    <StatCard label="Total Courses" value={courses.length} subtext="Active courses" color="#8b5cf6" />
+                    <StatCard label="Total Requests" value={stats.totalRequests || 0} subtext={`${stats.pendingRequests || 0} pending`} color="#f59e0b" />
+                    <StatCard label="Blockchain" value={blockchainStatus?.connected ? "Connected" : "Offline"} subtext={blockchainStatus?.connected ? "Active" : "Check Ganache"} color={blockchainStatus?.connected ? "#10b981" : "#ef4444"} />
+                  </>
+                )}
+              </div>
+            )}
+
+            {(user.role === 'school_officer' || user.role === 'hod' || user.role === 'course_advisor') && requests.length > 0 && (
+              <div className="quick-actions">
+                <div className="quick-action-card">
+                  <div className="quick-action-icon">
+                    {user.role === 'school_officer' ? '📋' : user.role === 'hod' ? '👨‍🏫' : '🤖'}
+                  </div>
+                  <div className="quick-action-content">
+                    <h4>
+                      {user.role === 'school_officer' ? 'Quick Review' : 
+                       user.role === 'hod' ? 'Department Review' : 
+                       'Auto-Assignment Ready'}
+                    </h4>
+                    <p>You have {requests.length} pending request{requests.length !== 1 ? 's' : ''}</p>
+                    <button className="quick-action-btn" onClick={() => handleTabChange('requests')}>
+                      {user.role === 'school_officer' ? 'Review Now →' : 
+                       user.role === 'hod' ? 'Review & Forward →' : 
+                       'Auto-Assign Now →'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {user.role === 'lecturer' && requests.length > 0 && (
+              <div className="quick-actions">
+                <div className="quick-action-card" style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)' }}>
+                  <div className="quick-action-icon">✏️</div>
+                  <div className="quick-action-content">
+                    <h4>Grading Tasks</h4>
+                    <p>You have {requests.length} grading task{requests.length !== 1 ? 's' : ''}</p>
+                    <button className="quick-action-btn" onClick={() => handleTabChange('grading')}>
+                      Grade Now →
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
           </>
         )}
@@ -163,43 +338,111 @@ const Dashboard = ({ user, onLogout }) => {
           <RequestManagement userRole={user.role} userId={user.id} />
         )}
 
-        {activeTab === 'courses' && (
-          <div className="page-placeholder">
-            <h2>Course Management</h2>
-            <p>Course listing and management interface coming soon.</p>
+        {activeTab === 'grading' && user.role === 'lecturer' && (
+          <LecturerGrading userId={user.id} />
+        )}
+
+        {activeTab === 'uploaded' && user.role === 'student' && (
+          <UploadedResults userId={user.id} />
+        )}
+
+        {activeTab === 'courses' && user.role !== 'school_officer' && (
+          <div className="courses-section">
+            <h3>Courses</h3>
+            <div className="courses-grid">
+              {courses.slice(0, 20).map(course => (
+                <div key={course.code} className="course-card">
+                  <div className="course-code">{course.code}</div>
+                  <div className="course-title">{course.title}</div>
+                  <div className="course-details">
+                    {course.creditUnits} credits • Level {course.level} • {course.semester} Semester
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        {activeTab === 'students' && (
-          <div className="page-placeholder">
-            <h2>Student Management</h2>
-            <p>Student directory and management tools coming soon.</p>
-          </div>
-        )}
-
-        {activeTab === 'results' && (
-          <div className="page-placeholder">
-            <h2>Results Management</h2>
-            <p>Full results management interface coming soon.</p>
-          </div>
-        )}
-
-        {activeTab === 'notifications' && (
-          <div className="notifications-panel" style={{ padding: '32px' }}>
-            <h2>Notifications</h2>
-            {notifications.map(notif => (
-              <div key={notif.id} className="notification-card" style={{
-                padding: '16px',
-                marginBottom: '12px',
-                background: 'white',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0'
-              }}>
-                <h4>{notif.title}</h4>
-                <p>{notif.message}</p>
-                <small>{new Date(notif.createdAt).toLocaleString()}</small>
+        {activeTab === 'students' && (user.role === 'hod' || user.role === 'admin') && (
+          <div className="students-section">
+            <div className="section-header">
+              <h3>Department Students - {user.department || 'All Departments'}</h3>
+              <div className="header-actions">
+                <p className="section-subtitle">Total: {filteredStudents.length} students</p>
+                {students.length > 0 && (
+                  <button className="export-btn" onClick={exportStudentsToCSV}>
+                    📊 Export to CSV
+                  </button>
+                )}
               </div>
-            ))}
+            </div>
+
+            <div className="students-search">
+              <input
+                type="text"
+                placeholder="Search by name, matric number or email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="search-input"
+              />
+              <select 
+                value={levelFilter} 
+                onChange={(e) => setLevelFilter(e.target.value)}
+                className="filter-select"
+              >
+                <option value="all">All Levels</option>
+                <option value="100">100 Level</option>
+                <option value="200">200 Level</option>
+                <option value="300">300 Level</option>
+                <option value="400">400 Level</option>
+                <option value="500">500 Level</option>
+                <option value="600">600 Level</option>
+              </select>
+            </div>
+
+            {filteredStudents.length === 0 ? (
+              <p className="no-data">No students found</p>
+            ) : (
+              <div className="students-list">
+                {filteredStudents.map((student, index) => (
+                  <div key={student._id} className="student-card">
+                    <div className="student-rank">{index + 1}</div>
+                    <div className="student-info">
+                      <div className="student-name">
+                        <div className="name-initial">{student.firstName?.[0]}{student.lastName?.[0]}</div>
+                        <span>{student.fullName || `${student.firstName} ${student.lastName}`}</span>
+                      </div>
+                      <div className="student-details">
+                        <span className="student-matric">{student.matricNumber}</span>
+                        <span className="student-level">Level {student.level}</span>
+                        <span className="student-email">{student.email}</span>
+                        <span className="student-phone">{student.phoneNumber || '-'}</span>
+                      </div>
+                    </div>
+                    <div className="student-status">
+                      <span className={`status-badge ${student.isActive ? 'active' : 'inactive'}`}>
+                        {student.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'blockchain' && user.role === 'admin' && (
+          <div className="blockchain-section">
+            <h3>Blockchain Status</h3>
+            <div className={`blockchain-status-card ${blockchainStatus?.connected ? 'connected' : 'disconnected'}`}>
+              <div className="status-indicator">
+                {blockchainStatus?.connected ? '🟢 Connected' : '🔴 Disconnected'}
+              </div>
+              <div className="status-details">
+                <p><strong>Network:</strong> {blockchainStatus?.network || 'Ganache'}</p>
+                <p><strong>Address:</strong> {blockchainStatus?.address || 'http://127.0.0.1:7545'}</p>
+              </div>
+            </div>
           </div>
         )}
       </div>

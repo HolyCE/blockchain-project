@@ -4,12 +4,13 @@ import '../styles/StudentRequestButton.css';
 
 const StudentRequestButton = ({ userId, onRequestSubmitted }) => {
   const [showModal, setShowModal] = useState(false);
-  const [step, setStep] = useState(1); // 1: select courses, 2: submit details
+  const [step, setStep] = useState(1); // 1: session details, 2: select courses
   const [requestId, setRequestId] = useState(null);
   const [availableCourses, setAvailableCourses] = useState([]);
   const [selectedCourses, setSelectedCourses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
   
   const [formData, setFormData] = useState({
     academicSession: '',
@@ -17,9 +18,9 @@ const StudentRequestButton = ({ userId, onRequestSubmitted }) => {
     resultLevel: ''
   });
 
-  // Load available courses when modal opens
+  // Load available courses when reaching step 2
   useEffect(() => {
-    if (showModal && step === 1) {
+    if (showModal && step === 2) {
       loadAvailableCourses();
     }
   }, [showModal, step]);
@@ -27,16 +28,15 @@ const StudentRequestButton = ({ userId, onRequestSubmitted }) => {
   const loadAvailableCourses = async () => {
     setLoading(true);
     try {
-      // Get user data from localStorage
       const userStr = localStorage.getItem('user');
       if (userStr) {
         const user = JSON.parse(userStr);
-        // Fetch courses for student's department and level
         const courses = await API.getCoursesByDepartment(user.department, user.level);
         setAvailableCourses(courses);
       }
     } catch (error) {
       console.error('Error loading courses:', error);
+      setError('Failed to load courses');
     }
     setLoading(false);
   };
@@ -56,34 +56,8 @@ const StudentRequestButton = ({ userId, onRequestSubmitted }) => {
     );
   };
 
-  const handleCreateDraft = async () => {
-    if (selectedCourses.length === 0) {
-      alert('Please select at least one course');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      // Step 1: Create draft
-      const draftResult = await API.createResultRequestDraft();
-      const newRequestId = draftResult.requestId;
-      setRequestId(newRequestId);
-
-      // Step 2: Add courses to draft
-      await API.addCoursesToRequest(newRequestId, selectedCourses);
-      
-      // Move to next step
-      setStep(2);
-    } catch (error) {
-      console.error('Error creating draft:', error);
-      alert('Failed to create request draft');
-    }
-    setSubmitting(false);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
+  const handleNextToCourses = () => {
+    // Validate step 1 fields
     if (!formData.academicSession || !formData.semester || !formData.resultLevel) {
       alert('Please fill in all required fields');
       return;
@@ -96,24 +70,61 @@ const StudentRequestButton = ({ userId, onRequestSubmitted }) => {
       return;
     }
 
+    // Move to course selection
+    setStep(2);
+  };
+
+  const handleCreateDraft = async () => {
+    if (selectedCourses.length === 0) {
+      alert('Please select at least one course');
+      return;
+    }
+
     setSubmitting(true);
+    setError('');
+    
     try {
-      // Step 3: Submit the completed request
-      const result = await API.submitResultRequest(requestId, {
+      console.log('📝 Step 1: Creating draft with session data:', {
+        academicSession: formData.academicSession,
+        semester: formData.semester,
+        resultLevel: formData.resultLevel
+      });
+      
+      // Step 1: Create draft with ALL information
+      const draftResult = await API.createResultRequestDraft();
+      console.log('✅ Draft created:', draftResult);
+      
+      const newRequestId = draftResult.requestId;
+      setRequestId(newRequestId);
+      
+      // Step 2: Add courses to draft
+      console.log('📝 Step 2: Adding courses:', selectedCourses);
+      await API.addCoursesToRequest(newRequestId, selectedCourses);
+      console.log('✅ Courses added successfully');
+      
+      // Step 3: Submit the completed request with session details
+      console.log('📝 Step 3: Submitting request with session details');
+      const submitResult = await API.submitResultRequest(newRequestId, {
         academicSession: formData.academicSession,
         semester: formData.semester,
         resultLevel: parseInt(formData.resultLevel)
       });
       
-      if (result) {
-        alert('Request submitted successfully! It will now be reviewed by the school officer.');
-        resetForm();
-        setShowModal(false);
-        if (onRequestSubmitted) onRequestSubmitted();
-      }
+      console.log('✅ Request submitted:', submitResult);
+      
+      alert('Request submitted successfully! It will now be reviewed by the school officer.');
+      resetForm();
+      setShowModal(false);
+      if (onRequestSubmitted) onRequestSubmitted();
     } catch (error) {
-      console.error('Error submitting request:', error);
-      alert('Failed to submit request');
+      console.error('❌ Error creating request - FULL ERROR:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
+      
+      // Show specific error message from backend
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to create request';
+      alert(`Error: ${errorMessage}`);
+      setError(errorMessage);
     }
     setSubmitting(false);
   };
@@ -122,6 +133,7 @@ const StudentRequestButton = ({ userId, onRequestSubmitted }) => {
     setStep(1);
     setRequestId(null);
     setSelectedCourses([]);
+    setError('');
     setFormData({
       academicSession: '',
       semester: 'First',
@@ -145,7 +157,7 @@ const StudentRequestButton = ({ userId, onRequestSubmitted }) => {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>
-                {step === 1 ? 'Select Courses' : 'Request Details'}
+                {step === 1 ? 'Session Details' : 'Select Courses'}
                 {step === 1 && ' (Step 1 of 2)'}
                 {step === 2 && ' (Step 2 of 2)'}
               </h3>
@@ -153,15 +165,92 @@ const StudentRequestButton = ({ userId, onRequestSubmitted }) => {
             </div>
 
             {step === 1 ? (
-              /* Step 1: Course Selection */
+              /* Step 1: Session Details Form */
+              <div className="modal-body">
+                <p className="step-instruction">
+                  First, provide the academic session details:
+                </p>
+
+                <div className="form-group">
+                  <label>Academic Session *</label>
+                  <input
+                    type="text"
+                    name="academicSession"
+                    placeholder="e.g., 2023/2024"
+                    value={formData.academicSession}
+                    onChange={handleChange}
+                    required
+                  />
+                  <small className="field-hint">Format: YYYY/YYYY (e.g., 2023/2024)</small>
+                </div>
+
+                <div className="form-group">
+                  <label>Semester *</label>
+                  <select 
+                    name="semester" 
+                    value={formData.semester} 
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="First">First Semester</option>
+                    <option value="Second">Second Semester</option>
+                    <option value="Rain">Rain Semester</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Result Level *</label>
+                  <select
+                    name="resultLevel"
+                    value={formData.resultLevel}
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="">Select Level</option>
+                    <option value="100">100 Level</option>
+                    <option value="200">200 Level</option>
+                    <option value="300">300 Level</option>
+                    <option value="400">400 Level</option>
+                    <option value="500">500 Level</option>
+                    <option value="600">600 Level</option>
+                  </select>
+                </div>
+
+                <div className="info-box workflow-info">
+                  <strong>📋 Approval Workflow:</strong>
+                  <ol>
+                    <li>School Officer reviews your request</li>
+                    <li>HOD assigns to Course Advisor</li>
+                    <li>Course Advisor assigns to Lecturers</li>
+                    <li>Lecturers enter grades</li>
+                    <li>HOD gives final approval</li>
+                    <li>Results published to your dashboard</li>
+                  </ol>
+                </div>
+              </div>
+            ) : (
+              /* Step 2: Course Selection */
               <div className="modal-body">
                 {loading ? (
                   <div className="loading-spinner">Loading available courses...</div>
+                ) : error ? (
+                  <div className="error-message">{error}</div>
                 ) : (
                   <>
                     <p className="step-instruction">
                       Select the courses you want to request results for:
                     </p>
+                    
+                    <div className="selected-session-summary" style={{
+                      background: '#f0f9ff',
+                      padding: '1rem',
+                      borderRadius: '8px',
+                      marginBottom: '1rem',
+                      border: '1px solid #bae6fd'
+                    }}>
+                      <strong>Session:</strong> {formData.academicSession} - {formData.semester} Semester<br/>
+                      <strong>Level:</strong> {formData.resultLevel}
+                    </div>
                     
                     <div className="courses-list">
                       {availableCourses.length === 0 ? (
@@ -193,87 +282,28 @@ const StudentRequestButton = ({ userId, onRequestSubmitted }) => {
                   </>
                 )}
               </div>
-            ) : (
-              /* Step 2: Request Details Form */
-              <form onSubmit={handleSubmit}>
-                <div className="modal-body">
-                  <p className="step-instruction">
-                    Provide academic session details for your request:
-                  </p>
+            )}
 
-                  <div className="selected-courses-summary">
-                    <strong>Selected Courses:</strong>
-                    <ul>
-                      {selectedCourses.map(code => {
-                        const course = availableCourses.find(c => c.code === code);
-                        return (
-                          <li key={code}>
-                            {code} - {course?.title || ''}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Academic Session *</label>
-                    <input
-                      type="text"
-                      name="academicSession"
-                      placeholder="e.g., 2023/2024"
-                      value={formData.academicSession}
-                      onChange={handleChange}
-                      required
-                    />
-                    <small className="field-hint">Format: YYYY/YYYY (e.g., 2023/2024)</small>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Semester *</label>
-                    <select 
-                      name="semester" 
-                      value={formData.semester} 
-                      onChange={handleChange}
-                      required
-                    >
-                      <option value="First">First Semester</option>
-                      <option value="Second">Second Semester</option>
-                      <option value="Rain">Rain Semester</option>
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Result Level *</label>
-                    <select
-                      name="resultLevel"
-                      value={formData.resultLevel}
-                      onChange={handleChange}
-                      required
-                    >
-                      <option value="">Select Level</option>
-                      <option value="100">100 Level</option>
-                      <option value="200">200 Level</option>
-                      <option value="300">300 Level</option>
-                      <option value="400">400 Level</option>
-                      <option value="500">500 Level</option>
-                      <option value="600">600 Level</option>
-                    </select>
-                  </div>
-
-                  <div className="info-box workflow-info">
-                    <strong>📋 Approval Workflow:</strong>
-                    <ol>
-                      <li>School Officer reviews your request</li>
-                      <li>HOD assigns to Course Advisor</li>
-                      <li>Course Advisor assigns to Lecturers</li>
-                      <li>Lecturers enter grades</li>
-                      <li>HOD gives final approval</li>
-                      <li>Results published to your dashboard</li>
-                    </ol>
-                  </div>
-                </div>
-
-                <div className="modal-footer">
+            <div className="modal-footer">
+              {step === 1 ? (
+                <>
+                  <button 
+                    type="button" 
+                    className="btn-cancel" 
+                    onClick={handleCloseModal}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn-next" 
+                    onClick={handleNextToCourses}
+                  >
+                    Next →
+                  </button>
+                </>
+              ) : (
+                <>
                   <button 
                     type="button" 
                     className="btn-back" 
@@ -282,35 +312,16 @@ const StudentRequestButton = ({ userId, onRequestSubmitted }) => {
                     ← Back
                   </button>
                   <button 
-                    type="submit" 
+                    type="button" 
                     className="btn-submit" 
-                    disabled={submitting}
+                    onClick={handleCreateDraft}
+                    disabled={selectedCourses.length === 0 || submitting}
                   >
                     {submitting ? 'Submitting...' : 'Submit Request'}
                   </button>
-                </div>
-              </form>
-            )}
-
-            {step === 1 && (
-              <div className="modal-footer">
-                <button 
-                  type="button" 
-                  className="btn-cancel" 
-                  onClick={handleCloseModal}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="button" 
-                  className="btn-next" 
-                  onClick={handleCreateDraft}
-                  disabled={selectedCourses.length === 0 || submitting}
-                >
-                  {submitting ? 'Creating...' : 'Next →'}
-                </button>
-              </div>
-            )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

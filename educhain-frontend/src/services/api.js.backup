@@ -1,0 +1,355 @@
+import axios from 'axios';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  headers: { 'Content-Type': 'application/json' }
+});
+
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('authToken');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+apiClient.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+const API = {
+  // ========== AUTHENTICATION ==========
+  login: async (identifier, password) => {
+    try {
+      const isEmail = identifier.includes('@');
+      const requestBody = isEmail 
+        ? { email: identifier, password }
+        : { matricNumber: identifier, password };
+      
+      const response = await apiClient.post('/auth/login', requestBody);
+      const { token, user } = response.data;
+      
+      localStorage.setItem('authToken', token);
+      localStorage.setItem('user', JSON.stringify({
+        id: user._id,
+        name: user.fullName,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        department: user.department,
+        faculty: user.faculty,
+        level: user.level,
+        matricNumber: user.matricNumber
+      }));
+      
+      return { success: true, token, user };
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || 'Login failed' };
+    }
+  },
+
+  logout: () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('user');
+  },
+
+  // ========== DASHBOARD STATS ==========
+  getDashboardStats: async () => {
+    try {
+      const response = await apiClient.get('/dashboard/stats');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+      throw error;
+    }
+  },
+
+  // ========== RESULT REQUESTS ==========
+  getStudentRequests: async () => {
+    try {
+      const response = await apiClient.get('/result-requests/student/my-requests');
+      return response.data.requests || [];
+    } catch (error) {
+      console.error('Error fetching student requests:', error);
+      return [];
+    }
+  },
+
+  getLecturerPendingRequests: async () => {
+    try {
+      const response = await apiClient.get('/result-requests/lecturer/pending-grading');
+      return response.data.requests || [];
+    } catch (error) {
+      console.error('Error fetching lecturer requests:', error);
+      return [];
+    }
+  },
+
+  getHODPendingRequests: async () => {
+    try {
+      const response = await apiClient.get('/result-requests/hod/pending');
+      return response.data.requests || [];
+    } catch (error) {
+      console.error('Error fetching HOD requests:', error);
+      return [];
+    }
+  },
+
+  getAdvisorPendingRequests: async () => {
+    try {
+      const response = await apiClient.get('/result-requests/advisor/pending');
+      return response.data.requests || [];
+    } catch (error) {
+      console.error('Error fetching advisor requests:', error);
+      return [];
+    }
+  },
+
+  getSchoolOfficerPendingRequests: async () => {
+    try {
+      const response = await apiClient.get('/result-requests/school-officer/pending');
+      return response.data.requests || [];
+    } catch (error) {
+      console.error('Error fetching school officer requests:', error);
+      return [];
+    }
+  },
+
+  getAdminRequests: async () => {
+    try {
+      const response = await apiClient.get('/result-requests/admin/all');
+      return response.data.requests || [];
+    } catch (error) {
+      console.error('Error fetching admin requests:', error);
+      return [];
+    }
+  },
+
+  // ========== COURSES ==========
+  getAllCourses: async () => {
+    try {
+      const response = await apiClient.get('/courses');
+      return response.data.courses || [];
+    } catch (error) {
+      console.error('Error fetching courses:', error);
+      return [];
+    }
+  },
+
+  getDepartmentCourses: async (department, level = null) => {
+    try {
+      const params = { department };
+      if (level) params.level = level;
+      const response = await apiClient.get('/courses', { params });
+      return response.data.courses || [];
+    } catch (error) {
+      console.error('Error fetching department courses:', error);
+      return [];
+    }
+  },
+
+  getCoursesByDepartment: async (department, level = null) => {
+    try {
+      const params = { department };
+      if (level) params.level = level;
+      const response = await apiClient.get('/courses', { params });
+      return response.data.courses || [];
+    } catch (error) {
+      console.error('Error fetching courses by department:', error);
+      return [];
+    }
+  },
+
+  getLecturerCourses: async () => {
+    try {
+      const response = await apiClient.get('/courses/lecturer/my-courses');
+      return response.data.courses || [];
+    } catch (error) {
+      console.error('Error fetching lecturer courses:', error);
+      return [];
+    }
+  },
+
+  // ========== STUDENTS ==========
+  getAllStudents: async () => {
+    try {
+      const response = await apiClient.get('/users?role=student');
+      return response.data.users || [];
+    } catch (error) {
+      console.error('Error fetching students:', error);
+      return [];
+    }
+  },
+
+  getDepartmentStudents: async (department) => {
+    try {
+      const response = await apiClient.get(`/users?role=student&department=${encodeURIComponent(department)}`);
+      return response.data.users || [];
+    } catch (error) {
+      console.error('Error fetching department students:', error);
+      return [];
+    }
+  },
+
+  // ========== COURSE ADVISORS ==========
+  getCourseAdvisorsByDepartment: async (department) => {
+    try {
+      const response = await apiClient.get(`/users?role=course_advisor&department=${encodeURIComponent(department)}`);
+      return response.data.users || [];
+    } catch (error) {
+      console.error('Error fetching course advisors:', error);
+      return [];
+    }
+  },
+
+  // ========== HOD ACTIONS ==========
+  forwardToAdvisor: async (requestId, advisorId, comment = '') => {
+    try {
+      const response = await apiClient.post(`/result-requests/${requestId}/hod-action`, {
+        courseAdvisorId: advisorId,
+        comment
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error forwarding to advisor:', error);
+      throw error;
+    }
+  },
+
+  // ========== COURSE ADVISOR ACTIONS ==========
+  autoAssignToLecturers: async (requestId, comment = '') => {
+    try {
+      const response = await apiClient.post(`/result-requests/${requestId}/auto-assign`, {
+        comment
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error auto-assigning to lecturers:', error);
+      throw error;
+    }
+  },
+
+  assignToLecturers: async (requestId, comment = '') => {
+    try {
+      const response = await apiClient.post(`/result-requests/${requestId}/advisor-action`, {
+        comment
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error assigning to lecturers:', error);
+      throw error;
+    }
+  },
+
+  // ========== LECTURER ACTIONS ==========
+  submitGrades: async (requestId, grades) => {
+    try {
+      const response = await apiClient.post(`/result-requests/${requestId}/submit-grades`, { grades });
+      return response.data;
+    } catch (error) {
+      console.error('Error submitting grades:', error);
+      throw error;
+    }
+  },
+
+  approveRequest: async (requestId, role, comment = '') => {
+    try {
+      let endpoint;
+      if (role === 'school_officer') {
+        endpoint = `/result-requests/${requestId}/school-officer-action`;
+      } else if (role === 'hod') {
+        endpoint = `/result-requests/${requestId}/hod-action`;
+      } else if (role === 'course_advisor') {
+        endpoint = `/result-requests/${requestId}/advisor-action`;
+      }
+      const response = await apiClient.post(endpoint, { action: 'approve', comment });
+      return response.data;
+    } catch (error) {
+      console.error('Error approving request:', error);
+      throw error;
+    }
+  },
+
+  rejectRequest: async (requestId, reason) => {
+    try {
+      const response = await apiClient.post(`/result-requests/${requestId}/reject`, { reason });
+      return response.data;
+    } catch (error) {
+      console.error('Error rejecting request:', error);
+      throw error;
+    }
+  },
+
+  // ========== BLOCKCHAIN ==========
+  getBlockchainStatus: async () => {
+    try {
+      const response = await apiClient.get('/blockchain/status');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching blockchain status:', error);
+      return { connected: false, error: error.message };
+    }
+  },
+
+  // ========== RESULT REQUEST ACTIONS ==========
+  createResultRequestDraft: async () => {
+    try {
+      const response = await apiClient.post('/result-requests/create');
+      return response.data;
+    } catch (error) {
+      console.error('Error creating draft:', error);
+      throw error;
+    }
+  },
+
+  addCoursesToRequest: async (requestId, courses) => {
+    try {
+      const response = await apiClient.post(`/result-requests/${requestId}/courses`, {
+        courses: courses.map(code => ({ courseCode: code }))
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error adding courses:', error);
+      throw error;
+    }
+  },
+
+  submitResultRequest: async (requestId, data) => {
+    try {
+      const response = await apiClient.post(`/result-requests/${requestId}/submit`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Error submitting request:', error);
+      throw error;
+    }
+  },
+
+  // ========== HELPER ==========
+  mapStatusToDisplay: (backendStatus) => {
+    const statusMap = {
+      'draft': { display: 'Draft', color: '#94a3b8' },
+      'submitted': { display: 'Pending School Officer', color: '#fbbf24' },
+      'department_review': { display: 'Department Review', color: '#f97316' },
+      'advisor_review': { display: 'Course Advisor Review', color: '#8b5cf6' },
+      'lecturer_grading': { display: 'Lecturer Grading', color: '#3b82f6' },
+      'hod_review': { display: 'HOD Final Review', color: '#ec4899' },
+      'approved': { display: 'Approved', color: '#10b981' },
+      'rejected': { display: 'Rejected', color: '#ef4444' },
+      'completed': { display: 'Published', color: '#059669' }
+    };
+    return statusMap[backendStatus] || { display: backendStatus, color: '#64748b' };
+  }
+};
+
+export default API;

@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import API from '../services/api';
 import '../styles/Login.css';
 
 const Login = ({ onLogin }) => {
+  const navigate = useNavigate();
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Login form state
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
 
-  // Sign Up form state
   const [signUpData, setSignUpData] = useState({
     firstName: '',
     lastName: '',
@@ -40,18 +40,9 @@ const Login = ({ onLogin }) => {
     setLoading(false);
     
     if (result.success) {
-      console.log('✅ Login successful! Token stored');
       onLogin(result.user);
     } else {
-      console.error('❌ Login failed:', result);
-      
-      // Show more detailed error message
-      if (result.errors) {
-        const errorMessages = result.errors.map(err => err.msg).join(', ');
-        setError(errorMessages);
-      } else {
-        setError(result.message || 'Invalid credentials');
-      }
+      setError(result.message || 'Invalid credentials');
     }
   };
 
@@ -109,7 +100,7 @@ const Login = ({ onLogin }) => {
   return (
     <div className="login-container">
       <div className="login-left">
-        <div className="login-brand">
+        <div className="login-brand" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
           <h1>Result Upload System</h1>
           <p>{isLoginMode ? 'Secure Academic Records Management' : 'Create a Student Account'}</p>
         </div>
@@ -136,7 +127,7 @@ const Login = ({ onLogin }) => {
           <h2>{isLoginMode ? 'Welcome Back' : 'Create Account'}</h2>
           <p className="login-subtitle">
             {isLoginMode 
-              ? 'Sign in with your email address' 
+              ? 'Sign in with your email or matric number' 
               : 'Register as a new student'}
           </p>
 
@@ -149,7 +140,7 @@ const Login = ({ onLogin }) => {
           {isLoginMode ? (
             <form onSubmit={handleLoginSubmit}>
               <div className="form-group">
-                <label>Email address</label>
+                <label>Email or Matric Number</label>
                 <input
                   type="text"
                   placeholder="email@university.edu or COM/22/1234"
@@ -234,137 +225,11 @@ const Login = ({ onLogin }) => {
                     onChange={handleSignUpChange}
                     required
                   >
-                    <option value="">Select Department</option>
-                    {/* Sciences */}
-                    <optgroup label="Sciences">
-                      <option value="Computer Science">Computer Science</option>
-                      <option value="Mathematics">Mathematics</option>
-                      <option value="Physics">Physics</option>
-                      <option value="Chemistry">Chemistry</option>
-                      <option value="Biology">Biology</option>
-                      <option value="Biochemistry">Biochemistry</option>
-                      <option value="Microbiology">Microbiology</option>
-                      <option value="Geology">Geology</option>
-                      <option value="Statistics">Statistics</option>
-                      <option value="Industrial Chemistry">Industrial Chemistry</option>
-                      <option value="Environmental Science">Environmental Science</option>
-                      <option value="Food Science">Food Science</option>
-                      <option value="Biotechnology">Biotechnology</option>
-                    </optgroup>
-                    
-                    {/* Engineering */}
-                    <optgroup label="Engineering">
-                      <option value="Computer Engineering">Computer Engineering</option>
-                      <option value="Electrical Engineering">Electrical Engineering</option>
-                      <option value="Electronic Engineering">Electronic Engineering</option>
-                      <option value="Mechanical Engineering">Mechanical Engineering</option>
-                      <option value="Civil Engineering">Civil Engineering</option>
-                      <option value="Chemical Engineering">Chemical Engineering</option>
-                      <option value="Biomedical Engineering">Biomedical Engineering</option>
-                      <option value="Aerospace Engineering">Aerospace Engineering</option>
-                      <option value="Petroleum Engineering">Petroleum Engineering</option>
-                      <option value="Agricultural Engineering">Agricultural Engineering</option>
-                      <option value="Industrial Engineering">Industrial Engineering</option>
-                      <option value="Materials Engineering">Materials Engineering</option>
-                      <option value="Mechatronics Engineering">Mechatronics Engineering</option>
-                      <option value="Structural Engineering">Structural Engineering</option>
-                      <option value="Telecommunication Engineering">Telecommunication Engineering</option>
-                    </optgroup>
-                    
-                    {/* Medical Sciences */}
-                    <optgroup label="Medical Sciences">
-                      <option value="Medicine and Surgery">Medicine and Surgery</option>
-                      <option value="Nursing">Nursing</option>
-                      <option value="Pharmacy">Pharmacy</option>
-                      <option value="Dentistry">Dentistry</option>
-                      <option value="Medical Laboratory Science">Medical Laboratory Science</option>
-                      <option value="Physiotherapy">Physiotherapy</option>
-                      <option value="Radiography">Radiography</option>
-                      <option value="Public Health">Public Health</option>
-                      <option value="Anatomy">Anatomy</option>
-                      <option value="Physiology">Physiology</option>
-                      <option value="Pharmacology">Pharmacology</option>
-                      <option value="Optometry">Optometry</option>
-                      <option value="Veterinary Medicine">Veterinary Medicine</option>
-                      <option value="Health Information Management">Health Information Management</option>
-                    </optgroup>
-                    
-                    {/* Arts and Humanities */}
-                    <optgroup label="Arts and Humanities">
-                      <option value="English">English</option>
-                      <option value="History">History</option>
-                      <option value="Philosophy">Philosophy</option>
-                      <option value="Linguistics">Linguistics</option>
-                      <option value="Religious Studies">Religious Studies</option>
-                      <option value="Theatre Arts">Theatre Arts</option>
-                      <option value="Fine Arts">Fine Arts</option>
-                      <option value="Music">Music</option>
-                      <option value="French">French</option>
-                      <option value="Arabic">Arabic</option>
-                    </optgroup>
-                    
-                    {/* Social Sciences */}
-                    <optgroup label="Social Sciences">
-                      <option value="Economics">Economics</option>
-                      <option value="Political Science">Political Science</option>
-                      <option value="Sociology">Sociology</option>
-                      <option value="Psychology">Psychology</option>
-                      <option value="Geography">Geography</option>
-                      <option value="Anthropology">Anthropology</option>
-                      <option value="International Relations">International Relations</option>
-                      <option value="Mass Communication">Mass Communication</option>
-                      <option value="Criminology">Criminology</option>
-                      <option value="Social Work">Social Work</option>
-                    </optgroup>
-                    
-                    {/* Business and Management */}
-                    <optgroup label="Business and Management">
-                      <option value="Business Administration">Business Administration</option>
-                      <option value="Accounting">Accounting</option>
-                      <option value="Finance">Finance</option>
-                      <option value="Marketing">Marketing</option>
-                      <option value="Entrepreneurship">Entrepreneurship</option>
-                      <option value="Human Resource Management">Human Resource Management</option>
-                      <option value="Banking and Finance">Banking and Finance</option>
-                      <option value="Insurance">Insurance</option>
-                      <option value="Actuarial Science">Actuarial Science</option>
-                    </optgroup>
-                    
-                    {/* Law */}
-                    <optgroup label="Law">
-                      <option value="Law">Law</option>
-                      <option value="International Law">International Law</option>
-                      <option value="Corporate Law">Corporate Law</option>
-                    </optgroup>
-                    
-                    {/* Education */}
-                    <optgroup label="Education">
-                      <option value="Education">Education</option>
-                      <option value="Early Childhood Education">Early Childhood Education</option>
-                      <option value="Special Education">Special Education</option>
-                      <option value="Educational Administration">Educational Administration</option>
-                      <option value="Guidance and Counseling">Guidance and Counseling</option>
-                    </optgroup>
-                    
-                    {/* Agriculture */}
-                    <optgroup label="Agriculture">
-                      <option value="Agriculture">Agriculture</option>
-                      <option value="Agricultural Economics">Agricultural Economics</option>
-                      <option value="Animal Science">Animal Science</option>
-                      <option value="Crop Science">Crop Science</option>
-                      <option value="Soil Science">Soil Science</option>
-                      <option value="Fisheries">Fisheries</option>
-                      <option value="Forestry">Forestry</option>
-                    </optgroup>
-                    
-                    {/* Environmental */}
-                    <optgroup label="Environmental">
-                      <option value="Architecture">Architecture</option>
-                      <option value="Urban Planning">Urban Planning</option>
-                      <option value="Estate Management">Estate Management</option>
-                      <option value="Surveying">Surveying</option>
-                      <option value="Quantity Surveying">Quantity Surveying</option>
-                    </optgroup>
+                    <option value="Computer Science">Computer Science</option>
+                    <option value="Mathematics">Mathematics</option>
+                    <option value="Physics">Physics</option>
+                    <option value="Chemistry">Chemistry</option>
+                    <option value="Biology">Biology</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -432,6 +297,23 @@ const Login = ({ onLogin }) => {
             </form>
           )}
 
+          <div style={{ textAlign: 'center', marginTop: '20px' }}>
+            <button 
+              onClick={() => navigate('/')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#3b82f6',
+                cursor: 'pointer',
+                fontSize: '14px',
+                textDecoration: 'underline'
+              }}
+            >
+              ← Back to Home
+            </button>
+          </div>
+
+          {/* Test Accounts - Uncomment if needed */}
           {/* {isLoginMode && (
             <div className="test-accounts">
               <p>Test Accounts</p>

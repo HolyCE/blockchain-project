@@ -59,7 +59,6 @@ router.post('/:id/courses', auth, authorize('student'), async (req, res) => {
       return res.status(404).json({ message: 'Draft not found or already submitted' });
     }
 
-    // Validate courses
     for (const course of courses) {
       const courseData = await Course.findOne({ 
         code: course.courseCode.toUpperCase(),
@@ -73,7 +72,6 @@ router.post('/:id/courses', auth, authorize('student'), async (req, res) => {
         });
       }
 
-      // Get primary lecturer
       const primaryLecturer = courseData.lecturers.find(l => l.isPrimary);
       
       resultRequest.courses.push({
@@ -130,14 +128,12 @@ router.post('/:id/submit', auth, authorize('student'), async (req, res) => {
       return res.status(400).json({ message: 'Academic session, semester, and result level are required' });
     }
 
-    // Update with submission details
     resultRequest.academicSession = academicSession;
     resultRequest.semester = semester;
     resultRequest.resultLevel = resultLevel;
     resultRequest.status = 'submitted';
     resultRequest.submittedAt = new Date();
 
-    // Add initial approvals for workflow
     resultRequest.approvals = [
       {
         role: 'school_officer',
@@ -206,7 +202,6 @@ router.get('/:id', auth, async (req, res) => {
       return res.status(404).json({ message: 'Result request not found' });
     }
 
-    // Check authorization
     if (req.user.role === 'student' && resultRequest.student._id.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Access denied' });
     }
@@ -222,15 +217,11 @@ router.get('/:id', auth, async (req, res) => {
 
 // ========== SCHOOL OFFICER ROUTES ==========
 
-// Get all pending requests for school officers
 router.get('/school-officer/pending', auth, authorize('school_officer', 'admin'), async (req, res) => {
   try {
     const { department, faculty, page = 1, limit = 20 } = req.query;
     
-    const query = { 
-      status: 'submitted'
-    };
-    
+    const query = { status: 'submitted' };
     if (department) query.department = department;
     if (faculty) query.faculty = faculty;
 
@@ -254,11 +245,10 @@ router.get('/school-officer/pending', auth, authorize('school_officer', 'admin')
   }
 });
 
-// School officer approve/reject request
 router.post('/:id/school-officer-action', auth, authorize('school_officer', 'admin'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { action, comment } = req.body; // action: 'approve' or 'reject'
+    const { action, comment } = req.body;
 
     const resultRequest = await ResultRequest.findById(id);
     
@@ -313,7 +303,6 @@ router.post('/:id/school-officer-action', auth, authorize('school_officer', 'adm
 
 // ========== HOD ROUTES ==========
 
-// Get department pending requests for HOD
 router.get('/hod/pending', auth, authorize('hod'), async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
@@ -344,7 +333,6 @@ router.get('/hod/pending', auth, authorize('hod'), async (req, res) => {
   }
 });
 
-// HOD assign to course advisor
 router.post('/:id/hod-action', auth, authorize('hod'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -379,7 +367,6 @@ router.post('/:id/hod-action', auth, authorize('hod'), async (req, res) => {
       date: new Date()
     });
 
-    // Add course advisor approval placeholder
     resultRequest.approvals.push({
       role: 'course_advisor',
       userId: courseAdvisorId,
@@ -407,7 +394,7 @@ router.post('/:id/hod-action', auth, authorize('hod'), async (req, res) => {
 
 // ========== COURSE ADVISOR ROUTES ==========
 
-// Get advisor pending requests
+// Get pending requests for course advisor
 router.get('/advisor/pending', auth, authorize('course_advisor'), async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
@@ -422,7 +409,7 @@ router.get('/advisor/pending', auth, authorize('course_advisor'), async (req, re
       },
       status: 'advisor_review'
     })
-      .populate('student', 'firstName lastName matricNumber')
+      .populate('student', 'firstName lastName matricNumber level')
       .sort({ submittedAt: 1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
@@ -445,73 +432,61 @@ router.get('/advisor/pending', auth, authorize('course_advisor'), async (req, re
       totalPages: Math.ceil(total / limit)
     });
   } catch (error) {
-    console.error('Get advisor pending error:', error);
+    console.error('Get course advisor pending error:', error);
     res.status(500).json({ message: 'Server error fetching pending requests' });
   }
 });
 
-// Course advisor assign to lecturers
+// Course advisor action (approve/reject)
 router.post('/:id/advisor-action', auth, authorize('course_advisor'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { comment } = req.body;
+    const { action, comment } = req.body;
 
     const resultRequest = await ResultRequest.findById(id);
-    
     if (!resultRequest) {
       return res.status(404).json({ message: 'Request not found' });
     }
 
-    // Check if this advisor is assigned to this request
     const advisorApproval = resultRequest.approvals.find(
-      a => a.role === 'course_advisor' && a.userId.toString() === req.user._id.toString()
+      a => a.role === 'course_advisor' && 
+           a.userId.toString() === req.user._id.toString() &&
+           a.status === 'pending'
     );
 
-    if (!advisorApproval || advisorApproval.status !== 'pending') {
+    if (!advisorApproval) {
       return res.status(403).json({ message: 'Not authorized to act on this request' });
     }
 
-    // Update advisor approval
-    advisorApproval.status = 'approved';
-    advisorApproval.comment = comment;
-    advisorApproval.date = new Date();
+    if (action === 'approve') {
+      advisorApproval.status = 'approved';
+      advisorApproval.comment = comment;
+      advisorApproval.date = new Date();
 
-    // Assign to lecturers for grading
-    resultRequest.status = 'lecturer_grading';
-
-    // Create lecturer approvals
-    const lecturerCourses = {};
-    resultRequest.courses.forEach(course => {
-      if (course.lecturer.userId) {
-        if (!lecturerCourses[course.lecturer.userId]) {
-          lecturerCourses[course.lecturer.userId] = [];
-        }
-        lecturerCourses[course.lecturer.userId].push(course.courseCode);
-      }
-    });
-
-    // Add lecturer approvals
-    for (const [lecturerId, courses] of Object.entries(lecturerCourses)) {
-      resultRequest.approvals.push({
-        role: 'lecturer',
-        userId: lecturerId,
-        status: 'pending',
-        comment: `Courses: ${courses.join(', ')}`
+      resultRequest.status = 'lecturer_grading';
+      
+      resultRequest.history.push({
+        action: 'Course advisor approved',
+        performedBy: req.user._id,
+        comment: comment || 'Approved by course advisor'
+      });
+    } else if (action === 'reject') {
+      advisorApproval.status = 'rejected';
+      resultRequest.status = 'rejected';
+      resultRequest.rejectionReason = comment;
+      
+      resultRequest.history.push({
+        action: 'Course advisor rejected',
+        performedBy: req.user._id,
+        comment: comment || 'Rejected by course advisor'
       });
     }
-
-    resultRequest.history.push({
-      action: 'Course advisor approved and assigned to lecturers',
-      performedBy: req.user._id,
-      comment: comment || 'Assigned to respective lecturers for grading'
-    });
 
     await resultRequest.save();
 
     res.json({
-      message: 'Request assigned to lecturers for grading',
-      status: resultRequest.status,
-      assignedLecturers: Object.keys(lecturerCourses).length
+      message: `Request ${action}d successfully`,
+      status: resultRequest.status
     });
   } catch (error) {
     console.error('Advisor action error:', error);
@@ -519,14 +494,122 @@ router.post('/:id/advisor-action', auth, authorize('course_advisor'), async (req
   }
 });
 
+// ========== COURSE ADVISOR AUTO-ASSIGNMENT ==========
+
+router.post('/:id/auto-assign', auth, authorize('course_advisor'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { comment } = req.body;
+
+    const resultRequest = await ResultRequest.findById(id);
+    if (!resultRequest) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    const advisorApproval = resultRequest.approvals.find(
+      a => a.role === 'course_advisor' && 
+           a.userId.toString() === req.user._id.toString() &&
+           a.status === 'pending'
+    );
+
+    if (!advisorApproval) {
+      return res.status(403).json({ message: 'Not authorized to act on this request' });
+    }
+
+    const lecturerCourses = {};
+    
+    for (const course of resultRequest.courses) {
+      const courseData = await Course.findOne({ code: course.courseCode });
+      
+      if (courseData && courseData.lecturers && courseData.lecturers.length > 0) {
+        const primaryLecturer = courseData.lecturers.find(l => l.isPrimary) || courseData.lecturers[0];
+        
+        if (primaryLecturer && primaryLecturer.lecturerId) {
+          const lecturerId = primaryLecturer.lecturerId.toString();
+          if (!lecturerCourses[lecturerId]) {
+            lecturerCourses[lecturerId] = {
+              lecturerId: primaryLecturer.lecturerId,
+              lecturerName: primaryLecturer.lecturerName,
+              courses: []
+            };
+          }
+          lecturerCourses[lecturerId].courses.push({
+            courseCode: course.courseCode,
+            courseTitle: course.courseTitle,
+            creditUnits: course.creditUnits
+          });
+        }
+      }
+    }
+
+    advisorApproval.status = 'approved';
+    advisorApproval.comment = comment;
+    advisorApproval.date = new Date();
+
+    const lecturerAssignments = [];
+    for (const [lecturerId, data] of Object.entries(lecturerCourses)) {
+      const lecturerApproval = {
+        role: 'lecturer',
+        userId: lecturerId,
+        status: 'pending',
+        comment: `Courses: ${data.courses.map(c => c.courseCode).join(', ')}`,
+        date: new Date(),
+        courses: data.courses
+      };
+      resultRequest.approvals.push(lecturerApproval);
+      
+      lecturerAssignments.push({
+        lecturerId,
+        lecturerName: data.lecturerName,
+        courses: data.courses
+      });
+      
+      await Notification.create({
+        recipient: lecturerId,
+        type: 'grade_assignment',
+        title: 'New Grades to Enter',
+        message: `You have ${data.courses.length} course(s) to grade for student ${resultRequest.studentName}`,
+        data: {
+          requestId: resultRequest._id,
+          studentName: resultRequest.studentName,
+          matricNumber: resultRequest.matricNumber,
+          courses: data.courses
+        },
+        priority: 'high',
+        actionUrl: `/lecturer/grading/${resultRequest._id}`
+      });
+    }
+
+    resultRequest.status = 'lecturer_grading';
+    
+    resultRequest.history.push({
+      action: 'Course advisor auto-assigned courses to lecturers',
+      performedBy: req.user._id,
+      comment: comment || `Auto-assigned ${Object.keys(lecturerCourses).length} lecturer(s)`,
+      timestamp: new Date()
+    });
+
+    await resultRequest.save();
+
+    res.json({
+      message: 'Courses auto-assigned to lecturers successfully',
+      status: resultRequest.status,
+      assignments: lecturerAssignments,
+      totalLecturers: lecturerAssignments.length,
+      totalCourses: resultRequest.courses.length
+    });
+  } catch (error) {
+    console.error('Auto-assign error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // ========== LECTURER ROUTES ==========
 
-// Get lecturer pending grading requests
 router.get('/lecturer/pending-grading', auth, authorize('lecturer'), async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
     
-    // Find requests where lecturer needs to grade courses
     const requests = await ResultRequest.find({
       'approvals': {
         $elemMatch: {
@@ -542,7 +625,6 @@ router.get('/lecturer/pending-grading', auth, authorize('lecturer'), async (req,
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
 
-    // Get only courses this lecturer needs to grade for each request
     const requestsWithCourses = await Promise.all(
       requests.map(async (request) => {
         const lecturerCourses = request.courses.filter(
@@ -579,11 +661,11 @@ router.get('/lecturer/pending-grading', auth, authorize('lecturer'), async (req,
   }
 });
 
-// Lecturer submit grades
+// Lecturer submit grades - AUTO-PUBLISH TO STUDENT
 router.post('/:id/submit-grades', auth, authorize('lecturer'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { grades } = req.body; // Array of { courseCode, grade, score, comment }
+    const { grades } = req.body;
 
     const resultRequest = await ResultRequest.findById(id);
     
@@ -591,7 +673,6 @@ router.post('/:id/submit-grades', auth, authorize('lecturer'), async (req, res) 
       return res.status(404).json({ message: 'Result request not found' });
     }
 
-    // Check if lecturer is assigned to grade for this request
     const lecturerApproval = resultRequest.approvals.find(
       a => a.role === 'lecturer' && 
            a.userId.toString() === req.user._id.toString() &&
@@ -602,9 +683,6 @@ router.post('/:id/submit-grades', auth, authorize('lecturer'), async (req, res) 
       return res.status(403).json({ message: 'Not authorized to grade for this request' });
     }
 
-    // Update grades for each course
-    let allCoursesGraded = true;
-    
     for (const gradeInfo of grades) {
       const course = resultRequest.courses.find(
         c => c.courseCode === gradeInfo.courseCode && 
@@ -622,7 +700,6 @@ router.post('/:id/submit-grades', auth, authorize('lecturer'), async (req, res) 
       }
     }
 
-    // Check if all courses for this lecturer are graded
     const lecturerCourses = resultRequest.courses.filter(
       c => c.lecturer.userId?.toString() === req.user._id.toString()
     );
@@ -630,7 +707,6 @@ router.post('/:id/submit-grades', auth, authorize('lecturer'), async (req, res) 
     const allGraded = lecturerCourses.every(course => course.status === 'graded');
     
     if (allGraded) {
-      // Update lecturer approval status
       lecturerApproval.status = 'approved';
       lecturerApproval.comment = 'All courses graded';
       lecturerApproval.date = new Date();
@@ -641,14 +717,40 @@ router.post('/:id/submit-grades', auth, authorize('lecturer'), async (req, res) 
         comment: `Graded ${lecturerCourses.length} course(s)`
       });
 
-      // Check if all lecturers have completed grading
       const pendingLecturers = resultRequest.approvals.filter(
         a => a.role === 'lecturer' && a.status === 'pending'
       );
 
       if (pendingLecturers.length === 0) {
-        // All lecturers done, move to final review
-        resultRequest.status = 'hod_review';
+        // All lecturers done - automatically complete and publish
+        resultRequest.status = 'completed';
+        resultRequest.completedAt = new Date();
+        
+        let totalCredits = 0;
+        let totalPoints = 0;
+        resultRequest.courses.forEach(course => {
+          if (course.gradePoint && course.creditUnits) {
+            totalCredits += course.creditUnits;
+            totalPoints += course.gradePoint * course.creditUnits;
+          }
+        });
+        const gpa = totalCredits > 0 ? totalPoints / totalCredits : 0;
+        
+        resultRequest.finalResult = {
+          totalCredits,
+          totalPoints,
+          gpa: parseFloat(gpa.toFixed(2)),
+          published: true,
+          publishedAt: new Date(),
+          publishedBy: req.user._id
+        };
+        
+        resultRequest.history.push({
+          action: 'Grades automatically published to student',
+          performedBy: req.user._id,
+          comment: 'Grades published after all lecturers completed grading',
+          timestamp: new Date()
+        });
       }
     }
 
@@ -665,103 +767,8 @@ router.post('/:id/submit-grades', auth, authorize('lecturer'), async (req, res) 
   }
 });
 
-// ========== FINAL APPROVAL & PUBLISHING ==========
-
-// Get requests ready for final approval (HOD)
-router.get('/hod/final-approval', auth, authorize('hod'), async (req, res) => {
-  try {
-    const requests = await ResultRequest.find({
-      department: req.user.department,
-      status: 'hod_review'
-    })
-      .populate('student', 'firstName lastName matricNumber')
-      .sort({ submittedAt: 1 });
-
-    res.json({
-      requests,
-      total: requests.length
-    });
-  } catch (error) {
-    console.error('Get final approval error:', error);
-    res.status(500).json({ message: 'Server error fetching final approval requests' });
-  }
-});
-
-// HOD final approval and publish
-router.post('/:id/final-approve', auth, authorize('hod'), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { comment, publishToStudent } = req.body;
-
-    const resultRequest = await ResultRequest.findOne({
-      _id: id,
-      department: req.user.department,
-      status: 'hod_review'
-    });
-
-    if (!resultRequest) {
-      return res.status(404).json({ message: 'Request not found or not ready for final approval' });
-    }
-
-    // Check if all courses are graded
-    const ungradedCourses = resultRequest.courses.filter(c => c.status !== 'graded');
-    if (ungradedCourses.length > 0) {
-      return res.status(400).json({ 
-        message: 'Cannot finalize: Some courses are not graded yet',
-        ungradedCourses: ungradedCourses.map(c => ({ code: c.courseCode, title: c.courseTitle }))
-      });
-    }
-
-    // Calculate final GPA
-    const { totalCredits, totalPoints, gpa } = calculateGPA(resultRequest.courses);
-
-    resultRequest.status = 'approved';
-    resultRequest.finalResult = {
-      totalCredits,
-      totalPoints,
-      gpa: gpa
-    };
-
-    // Add final approval
-    resultRequest.approvals.push({
-      role: 'hod_final',
-      userId: req.user._id,
-      status: 'approved',
-      comment,
-      date: new Date()
-    });
-
-    if (publishToStudent === true) {
-      resultRequest.status = 'completed';
-      resultRequest.finalResult.published = true;
-      resultRequest.finalResult.publishedAt = new Date();
-      resultRequest.finalResult.publishedBy = req.user._id;
-      resultRequest.completedAt = new Date();
-    }
-
-    resultRequest.history.push({
-      action: publishToStudent ? 'Final approval and published' : 'Final approval',
-      performedBy: req.user._id,
-      comment: comment || (publishToStudent ? 'Results published to student' : 'Approved, ready for publishing')
-    });
-
-    await resultRequest.save();
-
-    res.json({
-      message: publishToStudent ? 'Results published successfully' : 'Request approved, ready for publishing',
-      status: resultRequest.status,
-      gpa: resultRequest.finalResult.gpa,
-      totalCredits: resultRequest.finalResult.totalCredits
-    });
-  } catch (error) {
-    console.error('Final approve error:', error);
-    res.status(500).json({ message: 'Server error processing final approval' });
-  }
-});
-
 // ========== ADMIN ROUTES ==========
 
-// Get all requests (admin)
 router.get('/admin/all', auth, authorize('admin'), async (req, res) => {
   try {
     const { status, department, page = 1, limit = 20 } = req.query;
@@ -790,7 +797,6 @@ router.get('/admin/all', auth, authorize('admin'), async (req, res) => {
   }
 });
 
-// Delete request (admin only)
 router.delete('/:id', auth, authorize('admin'), async (req, res) => {
   try {
     const resultRequest = await ResultRequest.findByIdAndDelete(req.params.id);

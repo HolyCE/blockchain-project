@@ -1,0 +1,716 @@
+const express = require('express');
+const router = express.Router();
+const { auth, authorize } = require('../middleware/auth');
+const ResultRequest = require('../models/ResultRequest');
+const Course = require('../models/Course');
+const Notification = require('../models/Notification');
+const User = require('../models/User');
+const { calculateGradePoint, calculateGPA } = require('../utils/helpers');
+
+// ========== STUDENT ROUTES ==========
+
+// Create new result request (draft)
+router.post('/create', auth, authorize('student'), async (req, res) => {
+  try {
+    const student = req.user;
+    
+    const resultRequest = new ResultRequest({
+      student: student._id,
+      matricNumber: student.matricNumber,
+      studentName: student.fullName,
+      department: student.department,
+      faculty: student.faculty,
+      currentLevel: student.level,
+      status: 'draft',
+      history: [{
+        action: 'Draft created',
+        performedBy: student._id,
+        comment: 'Initial draft created by student'
+      }]
+    });
+
+    await resultRequest.save();
+
+    res.status(201).json({
+      message: 'Draft result request created',
+      requestId: resultRequest._id,
+      status: resultRequest.status,
+      createdAt: resultRequest.createdAt
+    });
+  } catch (error) {
+    console.error('Create draft error:', error);
+    res.status(500).json({ message: 'Server error creating draft' });
+  }
+});
+
+// Add courses to request
+router.post('/:id/courses', auth, authorize('student'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { courses } = req.body;
+    
+    const resultRequest = await ResultRequest.findOne({
+      _id: id,
+      student: req.user._id,
+      status: 'draft'
+    });
+
+    if (!resultRequest) {
+      return res.status(404).json({ message: 'Draft not found or already submitted' });
+    }
+
+    for (const course of courses) {
+      const courseData = await Course.findOne({ 
+        code: course.courseCode.toUpperCase(),
+        department: req.user.department,
+        isActive: true
+      });
+      
+      if (!courseData) {
+        return res.status(400).json({ 
+          message: `Course ${course.courseCode} not found in your department or is inactive` 
+        });
+      }
+
+      const primaryLecturer = courseData.lecturers.find(l => l.isPrimary);
+      
+      resultRequest.courses.push({
+        courseCode: courseData.code,
+        courseTitle: courseData.title,
+        creditUnits: courseData.creditUnits,
+        lecturer: {
+          name: primaryLecturer?.lecturerName || 'Not Assigned',
+          userId: primaryLecturer?.lecturerId
+        }
+      });
+    }
+
+    resultRequest.history.push({
+      action: 'Courses added',
+      performedBy: req.user._id,
+      comment: `Added ${courses.length} course(s)`
+    });
+
+    await resultRequest.save();
+
+    res.json({
+      message: 'Courses added successfully',
+      courses: resultRequest.courses,
+      totalCourses: resultRequest.courses.length
+    });
+  } catch (error) {
+    console.error('Add courses error:', error);
+    res.status(500).json({ message: 'Server error adding courses' });
+  }
+});
+
+// Submit result request
+router.post('/:id/submit', auth, authorize('student'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { academicSession, semester, resultLevel } = req.body;
+
+    const resultRequest = await ResultRequest.findOne({
+      _id: id,
+      student: req.user._id,
+      status: 'draft'
+    });
+
+    if (!resultRequest) {
+      return res.status(404).json({ message: 'Draft not found or already submitted' });
+    }
+
+    if (!resultRequest.courses || resultRequest.courses.length === 0) {
+      return res.status(400).json({ message: 'Please add courses before submitting' });
+    }
+
+    if (!academicSession || !semester || !resultLevel) {
+      return res.status(400).json({ message: 'Academic session, semester, and result level are required' });
+    }
+
+    resultRequest.academicSession = academicSession;
+    resultRequest.semester = semester;
+    resultRequest.resultLevel = resultLevel;
+    resultRequest.status = 'submitted';
+    resultRequest.submittedAt = new Date();
+
+    resultRequest.approvals = [
+      {
+        role: 'school_officer',
+        status: 'pending'
+      }
+    ];
+
+    resultRequest.history.push({
+      action: 'Submitted for approval',
+      performedBy: req.user._id,
+      comment: `Submitted for ${semester} semester ${academicSession}`
+    });
+
+    await resultRequest.save();
+
+    res.json({
+      message: 'Result request submitted successfully',
+      status: resultRequest.status,
+      nextStep: 'Awaiting school officer review',
+      submittedAt: resultRequest.submittedAt
+    });
+  } catch (error) {
+    console.error('Submit request error:', error);
+    res.status(500).json({ message: 'Server error submitting request' });
+  }
+});
+
+// Get student's result requests
+router.get('/student/my-requests', auth, authorize('student'), async (req, res) => {
+  try {
+    const { status, page = 1, limit = 10 } = req.query;
+    
+    const query = { student: req.user._id };
+    if (status) query.status = status;
+
+    const requests = await ResultRequest.find(query)
+      .select('-history -approvals')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    const total = await ResultRequest.countDocuments(query);
+
+    res.json({
+      requests,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / limit)
+    });
+  } catch (error) {
+    console.error('Get requests error:', error);
+    res.status(500).json({ message: 'Server error fetching requests' });
+  }
+});
+
+// Get single request details
+router.get('/:id', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const resultRequest = await ResultRequest.findById(id)
+      .populate('student', 'firstName lastName email phone')
+      .populate('courses.gradedBy', 'firstName lastName');
+
+    if (!resultRequest) {
+      return res.status(404).json({ message: 'Result request not found' });
+    }
+
+    if (req.user.role === 'student' && resultRequest.student._id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    res.json({
+      request: resultRequest
+    });
+  } catch (error) {
+    console.error('Get request error:', error);
+    res.status(500).json({ message: 'Server error fetching request' });
+  }
+});
+
+// ========== SCHOOL OFFICER ROUTES ==========
+
+router.get('/school-officer/pending', auth, authorize('school_officer', 'admin'), async (req, res) => {
+  try {
+    const { department, faculty, page = 1, limit = 20 } = req.query;
+    
+    const query = { status: 'submitted' };
+    if (department) query.department = department;
+    if (faculty) query.faculty = faculty;
+
+    const requests = await ResultRequest.find(query)
+      .populate('student', 'firstName lastName email phone')
+      .sort({ submittedAt: 1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    const total = await ResultRequest.countDocuments(query);
+
+    res.json({
+      requests,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / limit)
+    });
+  } catch (error) {
+    console.error('Get pending requests error:', error);
+    res.status(500).json({ message: 'Server error fetching pending requests' });
+  }
+});
+
+router.post('/:id/school-officer-action', auth, authorize('school_officer', 'admin'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action, comment } = req.body;
+
+    const resultRequest = await ResultRequest.findById(id);
+    
+    if (!resultRequest) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    if (resultRequest.status !== 'submitted') {
+      return res.status(400).json({ message: 'Request is not in submitted status' });
+    }
+
+    if (action === 'approve') {
+      resultRequest.status = 'department_review';
+      resultRequest.approvals.push({
+        role: 'school_officer',
+        userId: req.user._id,
+        status: 'approved',
+        comment,
+        date: new Date()
+      });
+
+      resultRequest.history.push({
+        action: 'School officer approved',
+        performedBy: req.user._id,
+        comment: comment || 'Approved by school officer'
+      });
+    } else if (action === 'reject') {
+      resultRequest.status = 'rejected';
+      resultRequest.rejectionReason = comment;
+      resultRequest.rejectedBy = req.user._id;
+      resultRequest.rejectedAt = new Date();
+
+      resultRequest.history.push({
+        action: 'School officer rejected',
+        performedBy: req.user._id,
+        comment: comment || 'Rejected by school officer'
+      });
+    }
+
+    await resultRequest.save();
+
+    res.json({
+      message: `Request ${action}d successfully`,
+      status: resultRequest.status,
+      updatedAt: resultRequest.updatedAt
+    });
+  } catch (error) {
+    console.error('School officer action error:', error);
+    res.status(500).json({ message: 'Server error processing action' });
+  }
+});
+
+// ========== HOD ROUTES ==========
+
+router.get('/hod/pending', auth, authorize('hod'), async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    
+    const requests = await ResultRequest.find({
+      department: req.user.department,
+      status: 'department_review'
+    })
+      .populate('student', 'firstName lastName matricNumber level')
+      .sort({ submittedAt: 1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    const total = await ResultRequest.countDocuments({
+      department: req.user.department,
+      status: 'department_review'
+    });
+
+    res.json({
+      requests,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / limit)
+    });
+  } catch (error) {
+    console.error('Get HOD pending error:', error);
+    res.status(500).json({ message: 'Server error fetching pending requests' });
+  }
+});
+
+router.post('/:id/hod-action', auth, authorize('hod'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { courseAdvisorId, comment } = req.body;
+
+    const resultRequest = await ResultRequest.findOne({
+      _id: id,
+      department: req.user.department,
+      status: 'department_review'
+    });
+
+    if (!resultRequest) {
+      return res.status(404).json({ message: 'Request not found or not in your department' });
+    }
+
+    const courseAdvisor = await User.findOne({ 
+      _id: courseAdvisorId, 
+      role: 'course_advisor',
+      department: req.user.department 
+    });
+    
+    if (!courseAdvisor) {
+      return res.status(400).json({ message: 'Invalid course advisor or not in your department' });
+    }
+
+    resultRequest.status = 'advisor_review';
+    resultRequest.approvals.push({
+      role: 'hod',
+      userId: req.user._id,
+      status: 'approved',
+      comment,
+      date: new Date()
+    });
+
+    resultRequest.approvals.push({
+      role: 'course_advisor',
+      userId: courseAdvisorId,
+      status: 'pending'
+    });
+
+    resultRequest.history.push({
+      action: 'HOD approved and forwarded to course advisor',
+      performedBy: req.user._id,
+      comment: comment || `Forwarded to ${courseAdvisor.fullName}`
+    });
+
+    await resultRequest.save();
+
+    res.json({
+      message: 'Request forwarded to course advisor',
+      status: resultRequest.status,
+      courseAdvisor: courseAdvisor.fullName
+    });
+  } catch (error) {
+    console.error('HOD action error:', error);
+    res.status(500).json({ message: 'Server error processing action' });
+  }
+});
+
+// ========== COURSE ADVISOR AUTO-ASSIGNMENT ==========
+
+router.post('/:id/auto-assign', auth, authorize('course_advisor'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { comment } = req.body;
+
+    const resultRequest = await ResultRequest.findById(id);
+    if (!resultRequest) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    const advisorApproval = resultRequest.approvals.find(
+      a => a.role === 'course_advisor' && 
+           a.userId.toString() === req.user._id.toString() &&
+           a.status === 'pending'
+    );
+
+    if (!advisorApproval) {
+      return res.status(403).json({ message: 'Not authorized to act on this request' });
+    }
+
+    const lecturerCourses = {};
+    
+    for (const course of resultRequest.courses) {
+      const courseData = await Course.findOne({ code: course.courseCode });
+      
+      if (courseData && courseData.lecturers && courseData.lecturers.length > 0) {
+        const primaryLecturer = courseData.lecturers.find(l => l.isPrimary) || courseData.lecturers[0];
+        
+        if (primaryLecturer && primaryLecturer.lecturerId) {
+          const lecturerId = primaryLecturer.lecturerId.toString();
+          if (!lecturerCourses[lecturerId]) {
+            lecturerCourses[lecturerId] = {
+              lecturerId: primaryLecturer.lecturerId,
+              lecturerName: primaryLecturer.lecturerName,
+              courses: []
+            };
+          }
+          lecturerCourses[lecturerId].courses.push({
+            courseCode: course.courseCode,
+            courseTitle: course.courseTitle,
+            creditUnits: course.creditUnits
+          });
+        }
+      }
+    }
+
+    advisorApproval.status = 'approved';
+    advisorApproval.comment = comment;
+    advisorApproval.date = new Date();
+
+    const lecturerAssignments = [];
+    for (const [lecturerId, data] of Object.entries(lecturerCourses)) {
+      const lecturerApproval = {
+        role: 'lecturer',
+        userId: lecturerId,
+        status: 'pending',
+        comment: `Courses: ${data.courses.map(c => c.courseCode).join(', ')}`,
+        date: new Date(),
+        courses: data.courses
+      };
+      resultRequest.approvals.push(lecturerApproval);
+      
+      lecturerAssignments.push({
+        lecturerId,
+        lecturerName: data.lecturerName,
+        courses: data.courses
+      });
+      
+      await Notification.create({
+        recipient: lecturerId,
+        type: 'grade_assignment',
+        title: 'New Grades to Enter',
+        message: `You have ${data.courses.length} course(s) to grade for student ${resultRequest.studentName}`,
+        data: {
+          requestId: resultRequest._id,
+          studentName: resultRequest.studentName,
+          matricNumber: resultRequest.matricNumber,
+          courses: data.courses
+        },
+        priority: 'high',
+        actionUrl: `/lecturer/grading/${resultRequest._id}`
+      });
+    }
+
+    resultRequest.status = 'lecturer_grading';
+    
+    resultRequest.history.push({
+      action: 'Course advisor auto-assigned courses to lecturers',
+      performedBy: req.user._id,
+      comment: comment || `Auto-assigned ${Object.keys(lecturerCourses).length} lecturer(s)`,
+      timestamp: new Date()
+    });
+
+    await resultRequest.save();
+
+    res.json({
+      message: 'Courses auto-assigned to lecturers successfully',
+      status: resultRequest.status,
+      assignments: lecturerAssignments,
+      totalLecturers: lecturerAssignments.length,
+      totalCourses: resultRequest.courses.length
+    });
+  } catch (error) {
+    console.error('Auto-assign error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// ========== LECTURER ROUTES ==========
+
+router.get('/lecturer/pending-grading', auth, authorize('lecturer'), async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    
+    const requests = await ResultRequest.find({
+      'approvals': {
+        $elemMatch: {
+          role: 'lecturer',
+          userId: req.user._id,
+          status: 'pending'
+        }
+      },
+      status: 'lecturer_grading'
+    })
+      .populate('student', 'firstName lastName matricNumber')
+      .sort({ submittedAt: 1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    const requestsWithCourses = await Promise.all(
+      requests.map(async (request) => {
+        const lecturerCourses = request.courses.filter(
+          course => course.lecturer.userId?.toString() === req.user._id.toString()
+        );
+        
+        return {
+          ...request.toObject(),
+          coursesToGrade: lecturerCourses
+        };
+      })
+    );
+
+    const total = await ResultRequest.countDocuments({
+      'approvals': {
+        $elemMatch: {
+          role: 'lecturer',
+          userId: req.user._id,
+          status: 'pending'
+        }
+      },
+      status: 'lecturer_grading'
+    });
+
+    res.json({
+      requests: requestsWithCourses,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / limit)
+    });
+  } catch (error) {
+    console.error('Get pending grading error:', error);
+    res.status(500).json({ message: 'Server error fetching pending grading' });
+  }
+});
+
+// Lecturer submit grades - AUTO-PUBLISH TO STUDENT
+router.post('/:id/submit-grades', auth, authorize('lecturer'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { grades } = req.body;
+
+    const resultRequest = await ResultRequest.findById(id);
+    
+    if (!resultRequest) {
+      return res.status(404).json({ message: 'Result request not found' });
+    }
+
+    const lecturerApproval = resultRequest.approvals.find(
+      a => a.role === 'lecturer' && 
+           a.userId.toString() === req.user._id.toString() &&
+           a.status === 'pending'
+    );
+
+    if (!lecturerApproval) {
+      return res.status(403).json({ message: 'Not authorized to grade for this request' });
+    }
+
+    for (const gradeInfo of grades) {
+      const course = resultRequest.courses.find(
+        c => c.courseCode === gradeInfo.courseCode && 
+             c.lecturer.userId?.toString() === req.user._id.toString()
+      );
+
+      if (course) {
+        course.grade = gradeInfo.grade;
+        course.score = gradeInfo.score;
+        course.gradePoint = calculateGradePoint(gradeInfo.grade, gradeInfo.score);
+        course.status = 'graded';
+        course.gradedBy = req.user._id;
+        course.gradedAt = new Date();
+        course.lecturerComment = gradeInfo.comment;
+      }
+    }
+
+    const lecturerCourses = resultRequest.courses.filter(
+      c => c.lecturer.userId?.toString() === req.user._id.toString()
+    );
+    
+    const allGraded = lecturerCourses.every(course => course.status === 'graded');
+    
+    if (allGraded) {
+      lecturerApproval.status = 'approved';
+      lecturerApproval.comment = 'All courses graded';
+      lecturerApproval.date = new Date();
+
+      resultRequest.history.push({
+        action: 'Lecturer completed grading',
+        performedBy: req.user._id,
+        comment: `Graded ${lecturerCourses.length} course(s)`
+      });
+
+      const pendingLecturers = resultRequest.approvals.filter(
+        a => a.role === 'lecturer' && a.status === 'pending'
+      );
+
+      if (pendingLecturers.length === 0) {
+        // All lecturers done - automatically complete and publish
+        resultRequest.status = 'completed';
+        resultRequest.completedAt = new Date();
+        
+        let totalCredits = 0;
+        let totalPoints = 0;
+        resultRequest.courses.forEach(course => {
+          if (course.gradePoint && course.creditUnits) {
+            totalCredits += course.creditUnits;
+            totalPoints += course.gradePoint * course.creditUnits;
+          }
+        });
+        const gpa = totalCredits > 0 ? totalPoints / totalCredits : 0;
+        
+        resultRequest.finalResult = {
+          totalCredits,
+          totalPoints,
+          gpa: parseFloat(gpa.toFixed(2)),
+          published: true,
+          publishedAt: new Date(),
+          publishedBy: req.user._id
+        };
+        
+        resultRequest.history.push({
+          action: 'Grades automatically published to student',
+          performedBy: req.user._id,
+          comment: 'Grades published after all lecturers completed grading',
+          timestamp: new Date()
+        });
+      }
+    }
+
+    await resultRequest.save();
+
+    res.json({
+      message: 'Grades submitted successfully',
+      allCoursesGraded: allGraded,
+      nextStatus: resultRequest.status
+    });
+  } catch (error) {
+    console.error('Submit grades error:', error);
+    res.status(500).json({ message: 'Server error submitting grades' });
+  }
+});
+
+// ========== ADMIN ROUTES ==========
+
+router.get('/admin/all', auth, authorize('admin'), async (req, res) => {
+  try {
+    const { status, department, page = 1, limit = 20 } = req.query;
+    
+    const query = {};
+    if (status) query.status = status;
+    if (department) query.department = department;
+
+    const requests = await ResultRequest.find(query)
+      .populate('student', 'firstName lastName matricNumber department')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    const total = await ResultRequest.countDocuments(query);
+
+    res.json({
+      requests,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / limit)
+    });
+  } catch (error) {
+    console.error('Get all requests error:', error);
+    res.status(500).json({ message: 'Server error fetching all requests' });
+  }
+});
+
+router.delete('/:id', auth, authorize('admin'), async (req, res) => {
+  try {
+    const resultRequest = await ResultRequest.findByIdAndDelete(req.params.id);
+    
+    if (!resultRequest) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    res.json({
+      message: 'Request deleted successfully',
+      deletedId: resultRequest._id
+    });
+  } catch (error) {
+    console.error('Delete request error:', error);
+    res.status(500).json({ message: 'Server error deleting request' });
+  }
+});
+
+module.exports = router;

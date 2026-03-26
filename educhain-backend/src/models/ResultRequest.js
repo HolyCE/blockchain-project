@@ -32,16 +32,16 @@ const resultRequestSchema = new mongoose.Schema({
   },
   resultLevel: {
     type: Number,
-    required: true
+    required: false
   },
   semester: {
     type: String,
     enum: ['First', 'Second', 'Rain'],
-    required: true
+    required: false
   },
   academicSession: {
     type: String,
-    required: true,
+    required: false,
     match: [/^\d{4}\/\d{4}$/, 'Please enter session in format: YYYY/YYYY']
   },
   
@@ -69,7 +69,6 @@ const resultRequestSchema = new mongoose.Schema({
         ref: 'User'
       }
     },
-    // Grade details (to be filled by lecturer)
     grade: {
       type: String,
       enum: ['A', 'B', 'C', 'D', 'E', 'F', 'P', null],
@@ -87,7 +86,6 @@ const resultRequestSchema = new mongoose.Schema({
       max: 5,
       default: null
     },
-    // Status per course
     status: {
       type: String,
       enum: ['pending', 'graded', 'approved', 'rejected'],
@@ -163,6 +161,28 @@ const resultRequestSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
     }
+  },
+  
+  // Blockchain Integration Fields
+  blockchainHash: {
+    type: String,
+    default: null
+  },
+  transactionHash: {
+    type: String,
+    default: null
+  },
+  blockNumber: {
+    type: Number,
+    default: null
+  },
+  verifiedOnBlockchain: {
+    type: Boolean,
+    default: false
+  },
+  verificationDate: {
+    type: Date,
+    default: null
   },
   
   // Timestamps

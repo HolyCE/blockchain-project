@@ -1,0 +1,88 @@
+// src/blockchain/config.js
+const Web3 = require('web3');
+const path = require('path');
+const fs = require('fs');
+
+class BlockchainService {
+  constructor() {
+    // Connect to Ganache (default port 7545)
+    this.web3 = new Web3('http://127.0.0.1:7545');
+    this.contractAddress = null;
+    this.contractABI = null;
+    this.contract = null;
+  }
+
+  async init() {
+    try {
+      // Check connection
+      const accounts = await this.web3.eth.getAccounts();
+      console.log(`✅ Connected to Ganache. Accounts: ${accounts.length}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Failed to connect to Ganache:', error.message);
+      return false;
+    }
+  }
+
+  // Hash a result record
+  hashResult(resultData) {
+    const crypto = require('crypto');
+    const dataString = JSON.stringify(resultData);
+    return crypto.createHash('sha256').update(dataString).digest('hex');
+  }
+
+  // Store result hash on blockchain (simulated - for development)
+  async storeResultHash(resultId, studentId, courseCode, score, grade, hash) {
+    try {
+      const accounts = await this.web3.eth.getAccounts();
+      const defaultAccount = accounts[0];
+      
+      // Create a transaction object (simulated blockchain record)
+      const transaction = {
+        from: defaultAccount,
+        to: defaultAccount,
+        data: this.web3.utils.utf8ToHex(JSON.stringify({
+          resultId,
+          studentId,
+          courseCode,
+          score,
+          grade,
+          hash,
+          timestamp: Date.now()
+        })),
+        gas: 6721975,
+        gasPrice: this.web3.utils.toWei('20', 'gwei')
+      };
+
+      // Send transaction (simulated)
+      const receipt = await this.web3.eth.sendTransaction(transaction);
+      
+      return {
+        success: true,
+        transactionHash: receipt.transactionHash,
+        blockHash: receipt.blockHash,
+        blockNumber: receipt.blockNumber
+      };
+    } catch (error) {
+      console.error('❌ Blockchain transaction failed:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  // Verify result integrity
+  async verifyResult(resultHash) {
+    // This would query the blockchain for the stored hash
+    // For now, we'll simulate verification
+    return {
+      isValid: true,
+      message: 'Result verified on blockchain - No tampering detected'
+    };
+  }
+}
+
+module.exports = new BlockchainService();
+
+

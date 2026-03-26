@@ -4,6 +4,8 @@ const morgan = require('morgan');
 const path = require('path');
 
 // Import routes
+const usersRoutes = require('./routes/users.routes');
+const blockchainRoutes = require('./routes/blockchain.routes');
 const authRoutes = require('./routes/auth.routes');
 const resultRequestRoutes = require('./routes/resultRequest.routes');
 const notificationRoutes = require('./routes/notification.routes');
@@ -17,9 +19,14 @@ app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static files
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use(express.static(path.join(__dirname, '../public')));
 
 // Routes
+app.use('/api/users', usersRoutes);
+app.use('/api/blockchain', blockchainRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/result-requests', resultRequestRoutes);
 app.use('/api/notifications', notificationRoutes);

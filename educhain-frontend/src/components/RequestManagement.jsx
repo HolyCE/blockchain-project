@@ -1,228 +1,581 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import API from '../services/api';
+import { ToastContainer } from './Toast';
 import '../styles/RequestManagement.css';
-import RequestStatusTracker from './RequestStatusTracker';
 
 const RequestManagement = ({ userRole, userId }) => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
+  const [error, setError] = useState('');
   const [selectedRequest, setSelectedRequest] = useState(null);
-  const [actionType, setActionType] = useState(''); // 'approve' or 'reject'
-  const [comment, setComment] = useState('');
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [approvingAll, setApprovingAll] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [toasts, setToasts] = useState([]);
+  const [courseAdvisors, setCourseAdvisors] = useState([]);
+  const [selectedAdvisorId, setSelectedAdvisorId] = useState('');
+  const [userDepartment, setUserDepartment] = useState('');
 
-useEffect(() => {
-  loadRequests();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [userRole, userId]);
-
-  const loadRequests = useCallback(async () => {
-  setLoading(true);
-  try {
-    let data;
-    if (userRole === 'student') {
-      data = await API.getStudentRequests(userId);
-    } else if (userRole === 'lecturer') {
-      data = await API.getLecturerRequests(userId);
-    } else if (userRole === 'course_advisor') {
-      data = await API.getCourseAdvisorRequests(userId);
-    } else if (userRole === 'hod') {
-      data = await API.getHODRequests(userId);
-    } else if (userRole === 'admin') {
-      data = await API.getAdminRequests();
-    }
-    setRequests(data);
-  } catch (error) {
-    console.error('Error loading requests:', error);
-  }
-  setLoading(false);
-}, [userRole, userId]);
-
-
-  const handleActionClick = (request, type) => {
-    setSelectedRequest(request);
-    setActionType(type);
-    setShowModal(true);
-    setComment('');
+  const addToast = (message, type = 'success') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
   };
 
-  const handleSubmitAction = async () => {
-    if (!selectedRequest) return;
+  const removeToast = (id) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
 
+  useEffect(() => {
+    loadUserDepartment();
+  }, []);
+
+  useEffect(() => {
+    if (userRole === 'hod' && userDepartment) {
+      loadCourseAdvisors();
+    }
+  }, [userRole, userDepartment]);
+
+  const loadUserDepartment = async () => {
     try {
-      let result;
-      if (actionType === 'approve') {
-        result = await API.approveRequest(selectedRequest.id, userRole, comment);
-        alert(`Request approved!\nNew status: ${result.newStatus}`);
-      } else if (actionType === 'reject') {
-        if (!comment.trim()) {
-          alert('Please provide a reason for rejection');
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setUserDepartment(user.department);
+      }
+    } catch (error) {
+      console.error('Error loading user department:', error);
+    }
+  };
+
+  const loadCourseAdvisors = async () => {
+    try {
+      console.log('Loading course advisors for department:', userDepartment);
+      const advisors = await API.getCourseAdvisorsByDepartment(userDepartment);
+      console.log('Advisors loaded:', advisors);
+      setCourseAdvisors(advisors);
+    } catch (error) {
+      console.error('Error loading course advisors:', error);
+      addToast('Failed to load course advisors', 'error');
+    }
+  };
+
+  const loadRequests = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      let data = [];
+      if (userRole === 'school_officer') {
+        data = await API.getSchoolOfficerPendingRequests();
+      } else if (userRole === 'student') {
+        data = await API.getStudentRequests();
+      } else if (userRole === 'lecturer') {
+        data = await API.getLecturerPendingRequests();
+      } else if (userRole === 'hod') {
+        data = await API.getHODPendingRequests();
+      } else if (userRole === 'course_advisor') {
+        data = await API.getAdvisorPendingRequests();
+      } else if (userRole === 'admin') {
+        data = await API.getAdminRequests();
+      }
+      setRequests(data);
+    } catch (error) {
+      console.error('Error loading requests:', error);
+      setError('Failed to load requests');
+    }
+    setLoading(false);
+  }, [userRole]);
+
+  useEffect(() => {
+    loadRequests();
+  }, [loadRequests]);
+
+  const handleRequestClick = (request) => {
+    setSelectedRequest(request);
+    setSelectedAdvisorId('');
+    setShowRequestModal(true);
+  };
+
+  const handleApproveAll = async () => {
+    if (requests.length === 0) {
+      addToast('No pending requests to approve', 'warning');
+      return;
+    }
+
+    if (userRole === 'hod' && !selectedAdvisorId) {
+      addToast('Please select a course advisor first', 'warning');
+      return;
+    }
+
+    setApprovingAll(true);
+    let approved = 0;
+    let failed = 0;
+
+    for (const request of requests) {
+      try {
+        if (userRole === 'school_officer') {
+          await API.approveRequest(request._id, userRole, 'Bulk approval by school officer');
+          approved++;
+        } else if (userRole === 'hod') {
+          await API.forwardToAdvisor(request._id, selectedAdvisorId, 'Forwarded by HOD');
+          approved++;
+        } else if (userRole === 'course_advisor') {
+          const result = await API.autoAssignToLecturers(request._id, 'Bulk auto-assigned by course advisor');
+          console.log('Auto-assign result:', result);
+          approved++;
+        }
+      } catch (error) {
+        console.error('Failed to process request:', error);
+        failed++;
+      }
+    }
+
+    addToast(`Approval complete! ✅ ${approved} approved, ❌ ${failed} failed`, approved > 0 ? 'success' : 'error');
+    setApprovingAll(false);
+    setSelectedAdvisorId('');
+    loadRequests();
+  };
+
+  const handleApproveSingle = async (requestId) => {
+    setProcessing(true);
+    try {
+      if (userRole === 'school_officer') {
+        await API.approveRequest(requestId, userRole, 'Approved by school officer');
+        addToast('Request approved successfully! Forwarded to HOD.', 'success');
+      } else if (userRole === 'hod') {
+        if (!selectedAdvisorId) {
+          addToast('Please select a course advisor', 'warning');
+          setProcessing(false);
           return;
         }
-        result = await API.rejectRequest(selectedRequest.id, comment);
-        alert('Request rejected');
+        const result = await API.forwardToAdvisor(requestId, selectedAdvisorId, 'Forwarded by HOD');
+        console.log('Forward result:', result);
+        addToast('Request forwarded to course advisor successfully!', 'success');
+      } else if (userRole === 'course_advisor') {
+        const result = await API.autoAssignToLecturers(requestId, 'Auto-assigned by course advisor');
+        console.log('Auto-assign result:', result);
+        addToast(`Successfully assigned to ${result.totalLecturers} lecturer(s) for ${result.totalCourses} course(s)!`, 'success');
       }
       
-      setShowModal(false);
+      loadRequests();
+      setShowRequestModal(false);
       setSelectedRequest(null);
-      loadRequests(); // Reload to show updated status
+      setSelectedAdvisorId('');
     } catch (error) {
       console.error('Error processing request:', error);
-      alert('Failed to process request');
+      console.error('Error details:', error.response?.data);
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to process request';
+      addToast(errorMessage, 'error');
     }
+    setProcessing(false);
+  };
+
+  const handleRejectClick = () => {
+    setShowRejectModal(true);
+  };
+
+  const handleRejectConfirm = async () => {
+    if (!rejectReason.trim()) {
+      addToast('Please provide a reason for rejection', 'warning');
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      await API.rejectRequest(selectedRequest._id, rejectReason);
+      addToast('Request rejected. The student will be notified.', 'warning');
+      loadRequests();
+      setShowRejectModal(false);
+      setShowRequestModal(false);
+      setSelectedRequest(null);
+      setRejectReason('');
+    } catch (error) {
+      console.error('Error rejecting request:', error);
+      addToast('Failed to reject request. Please try again.', 'error');
+    }
+    setProcessing(false);
   };
 
   const getStatusColor = (status) => {
-    const colors = {
-      'Pending Lecturer Review': '#fbbf24',
-      'Approved by Lecturer - Awaiting Admin': '#3b82f6',
-      'Approved by Admin - Ready for Blockchain': '#10b981',
-      'Committed to Blockchain': '#059669',
-      'Rejected': '#ef4444'
-    };
-    return colors[status] || '#94a3b8';
+    return API.mapStatusToDisplay(status).color;
   };
 
- const canTakeAction = (request) => {
-  if (userRole === 'lecturer' && request.status.includes('Pending Lecturer')) {
-    return true;
-  }
-  if (userRole === 'course_advisor' && request.status.includes('Awaiting Course Advisor')) {
-    return true;
-  }
-  if (userRole === 'hod' && request.status.includes('Awaiting HOD')) {
-    return true;
-  }
-  if (userRole === 'admin' && request.status.includes('Awaiting Admin')) {
-    return true;
-  }
-  return false;
-};
+  const getStatusDisplay = (status) => {
+    return API.mapStatusToDisplay(status).display;
+  };
+
+  const getRoleTitle = () => {
+    switch(userRole) {
+      case 'school_officer':
+        return 'Pending Requests for Review';
+      case 'hod':
+        return 'Department Requests - Pending Review';
+      case 'course_advisor':
+        return 'Requests Assigned for Review';
+      case 'lecturer':
+        return 'Pending Grading Tasks';
+      case 'admin':
+        return 'All Requests';
+      default:
+        return 'Pending Approvals';
+    }
+  };
+
+  const getActionButtonText = () => {
+    switch(userRole) {
+      case 'school_officer':
+        return 'Approve All';
+      case 'hod':
+        return 'Forward All to Advisor';
+      case 'course_advisor':
+        return 'Auto-Assign All to Lecturers';
+      default:
+        return 'Approve All';
+    }
+  };
 
   if (loading) return <div className="loading">Loading requests...</div>;
 
   return (
     <div className="request-management">
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      
       <div className="section-header">
-       <h3>
-        {userRole === 'student' ? 'My Requests' : 
-        userRole === 'lecturer' ? 'Pending Lecturer Approval' : 
-        userRole === 'course_advisor' ? 'Pending Course Advisor Approval' :
-   userRole === 'hod' ? 'Pending HOD Approval' :
-   'Pending Admin Verification'}
-       </h3>
-        <p>
-          {userRole === 'student' ? 'Track your result upload and correction requests' :
-           userRole === 'lecturer' ? 'Review and approve student requests' :
-           'Verify and commit approved requests to blockchain'}
-        </p>
+        <div>
+          <h3>{getRoleTitle()}</h3>
+          <p className="request-count">
+            {requests.length} {requests.length === 1 ? 'request' : 'requests'} awaiting action
+          </p>
+        </div>
+        
+        {requests.length > 0 && (userRole === 'school_officer' || userRole === 'hod' || userRole === 'course_advisor') && (
+          <button 
+            className="approve-all-btn" 
+            onClick={handleApproveAll}
+            disabled={approvingAll}
+          >
+            <span className="btn-icon">✓</span>
+            {approvingAll ? 'Processing...' : getActionButtonText()}
+          </button>
+        )}
       </div>
 
+      {error && (
+        <div className="error-banner">{error}</div>
+      )}
+
       {requests.length === 0 ? (
-        <div className="no-requests">
-          <p> No {userRole === 'student' ? 'active' : 'pending'} requests</p>
+        <div className="empty-state">
+          <div className="empty-icon">📭</div>
+          <h4>No Pending Requests</h4>
+          <p>All requests have been processed. Check back later for new submissions.</p>
         </div>
       ) : (
         <div className="requests-grid">
           {requests.map(req => (
-            <div key={req.id} className="request-card">
+            <div 
+              key={req._id} 
+              className="request-card"
+              onClick={() => handleRequestClick(req)}
+            >
               <div className="request-card-header">
-                <div>
-                  <div className="request-course">
-                    <strong>{req.courseCode}:</strong> {req.courseName}
-                  </div>
-                  {userRole === 'student' && (
-    <div style={{ marginTop: '16px' }}>
-    <RequestStatusTracker request={req} />
-  </div>
-)}
+                <div className="student-avatar">
+                  {req.studentName?.charAt(0) || 'S'}
+                </div>
+                <div className="student-info">
+                  <div className="student-name">{req.studentName || req.student?.name || 'Unknown'}</div>
+                  <div className="student-matric">{req.matricNumber}</div>
                 </div>
                 <span 
                   className="status-badge"
                   style={{ background: getStatusColor(req.status) }}
                 >
-                  {req.status}
+                  {getStatusDisplay(req.status)}
                 </span>
               </div>
 
-              <div className="request-type-badge">
-                {req.requestType === 'upload' ? '📤 Upload Request' : '✏️ Correction Request'}
-              </div>
-
-              <div className="request-message">
-                <strong>Message:</strong>
-                <p>{req.message}</p>
+              <div className="request-details">
+                <div className="detail-row">
+                  <span className="detail-label">Session:</span>
+                  <span>{req.academicSession || 'Pending'} • {req.semester || 'N/A'}</span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-label">Courses:</span>
+                  <span className="course-count">{req.courses?.length || 0} courses requested</span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-label">Submitted:</span>
+                  <span>{req.submittedAt ? new Date(req.submittedAt).toLocaleDateString() : 'Not submitted'}</span>
+                </div>
               </div>
 
               <div className="request-footer">
-                <span className="request-time">
-                  Created: {req.createdAt}
-                </span>
-                
-                {canTakeAction(req) && (
-                  <div className="request-actions">
-                    <button 
-                      className="btn-approve"
-                      onClick={() => handleActionClick(req, 'approve')}
-                    >
-                      ✓ Approve
-                    </button>
-                    <button 
-                      className="btn-reject"
-                      onClick={() => handleActionClick(req, 'reject')}
-                    >
-                      ✕ Reject
-                    </button>
-                  </div>
-                )}
+                <button className="view-details-btn">
+                  View Full Details
+                  <span className="btn-arrow">→</span>
+                </button>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Action Modal */}
-      {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      {/* Request Details Modal */}
+      {showRequestModal && selectedRequest && (
+        <div className="modal-overlay" onClick={() => setShowRequestModal(false)}>
+          <div className="modal-content request-details-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>{actionType === 'approve' ? 'Approve Request' : 'Reject Request'}</h3>
-              <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
+              <h3>Result Request Details</h3>
+              <button className="modal-close" onClick={() => setShowRequestModal(false)}>✕</button>
             </div>
-            
+
             <div className="modal-body">
-              <div className="selected-request-info">
-                <strong>{selectedRequest?.courseCode}:</strong> {selectedRequest?.courseName}
-                <div className="info-detail">Student: {selectedRequest?.studentName}</div>
-                <div className="info-detail">Request: {selectedRequest?.message}</div>
+              {/* Student Information */}
+              <div className="details-section">
+                <h4>👤 Student Information</h4>
+                <div className="details-grid">
+                  <div className="detail-item">
+                    <label>Full Name</label>
+                    <span>{selectedRequest.studentName || selectedRequest.student?.name}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Matric Number</label>
+                    <span>{selectedRequest.matricNumber}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Department</label>
+                    <span>{selectedRequest.department}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Faculty</label>
+                    <span>{selectedRequest.faculty}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Current Level</label>
+                    <span>Level {selectedRequest.currentLevel}</span>
+                  </div>
+                </div>
               </div>
-              
+
+              {/* Request Information */}
+              <div className="details-section">
+                <h4>📋 Request Information</h4>
+                <div className="details-grid">
+                  <div className="detail-item">
+                    <label>Academic Session</label>
+                    <span>{selectedRequest.academicSession || 'Not specified'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Semester</label>
+                    <span>{selectedRequest.semester || 'Not specified'}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Result Level</label>
+                    <span>{selectedRequest.resultLevel || selectedRequest.currentLevel}</span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Status</label>
+                    <span className="status-text" style={{ color: getStatusColor(selectedRequest.status) }}>
+                      {getStatusDisplay(selectedRequest.status)}
+                    </span>
+                  </div>
+                  <div className="detail-item">
+                    <label>Submitted Date</label>
+                    <span>{selectedRequest.submittedAt ? new Date(selectedRequest.submittedAt).toLocaleString() : 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Requested Courses */}
+              <div className="details-section">
+                <h4>📚 Requested Courses ({selectedRequest.courses?.length || 0})</h4>
+                <div className="courses-table-container">
+                  <table className="courses-details-table">
+                    <thead>
+                      <tr>
+                        <th>Code</th>
+                        <th>Course Title</th>
+                        <th>Credits</th>
+                        <th>Current Lecturer</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedRequest.courses?.map((course, idx) => (
+                        <tr key={idx}>
+                          <td><strong>{course.courseCode}</strong></td>
+                          <td>{course.courseTitle}</td>
+                          <td>{course.creditUnits}</td>
+                          <td>{course.lecturer?.name || 'Not Assigned'}</td>
+                          <td>
+                            <span className="course-status" style={{
+                              background: course.status === 'graded' ? '#10b981' : '#fbbf24'
+                            }}>
+                              {course.status || 'Pending'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* HOD specific: Select Course Advisor */}
+              {userRole === 'hod' && selectedRequest.status === 'department_review' && (
+                <div className="details-section">
+                  <h4>📌 Assign to Course Advisor</h4>
+                  <div className="form-group">
+                    <label>Select Course Advisor *</label>
+                    {courseAdvisors.length === 0 ? (
+                      <div className="no-advisors-warning">
+                        <p>⚠️ No course advisors available for {userDepartment}</p>
+                        <small>Please ensure course advisors are added to the system.</small>
+                      </div>
+                    ) : (
+                      <select 
+                        value={selectedAdvisorId} 
+                        onChange={(e) => setSelectedAdvisorId(e.target.value)}
+                        className="advisor-select"
+                      >
+                        <option value="">-- Select a Course Advisor --</option>
+                        {courseAdvisors.map(advisor => (
+                          <option key={advisor._id} value={advisor._id}>
+                            {advisor.fullName || `${advisor.firstName} ${advisor.lastName}`} - {advisor.department}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Course Advisor Auto-Assignment Preview */}
+              {userRole === 'course_advisor' && selectedRequest.status === 'advisor_review' && (
+                <div className="details-section">
+                  <h4>🤖 Auto-Assignment Preview</h4>
+                  <div className="auto-assign-preview">
+                    <p>When you approve this request, courses will be automatically assigned to their respective lecturers:</p>
+                    <ul className="lecturer-preview-list">
+                      {selectedRequest.courses?.map(course => (
+                        <li key={course.courseCode}>
+                          <strong>{course.courseCode}</strong> - {course.courseTitle}
+                          <span className="arrow">→</span>
+                          <span className="lecturer-name">{course.lecturer?.name || 'Not Assigned'}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="info-box">
+                      <strong>💡 Note:</strong> Click "Auto-Assign to Lecturers" to automatically distribute these courses to the lecturers shown above.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedRequest.history && selectedRequest.history.length > 0 && (
+                <div className="details-section">
+                  <h4>📜 Request History</h4>
+                  <div className="history-timeline">
+                    {selectedRequest.history.map((event, idx) => (
+                      <div key={idx} className="history-item">
+                        <div className="history-icon">
+                          {event.action === 'Submitted for approval' ? '📤' : 
+                           event.action.includes('approved') ? '✅' : 
+                           event.action.includes('rejected') ? '❌' : '📋'}
+                        </div>
+                        <div className="history-content">
+                          <div className="history-action">{event.action}</div>
+                          {event.comment && <div className="history-comment">{event.comment}</div>}
+                          <div className="history-time">
+                            {new Date(event.timestamp).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              {((userRole === 'school_officer' && selectedRequest.status === 'submitted') ||
+                (userRole === 'hod' && selectedRequest.status === 'department_review') ||
+                (userRole === 'course_advisor' && selectedRequest.status === 'advisor_review')) && (
+                <>
+                  <button 
+                    className="btn-approve" 
+                    onClick={() => handleApproveSingle(selectedRequest._id)}
+                    disabled={processing || (userRole === 'hod' && !selectedAdvisorId)}
+                  >
+                    <span>✓</span> {userRole === 'hod' ? 'Forward to Advisor' : userRole === 'course_advisor' ? 'Auto-Assign to Lecturers' : 'Approve Request'}
+                  </button>
+                  <button 
+                    className="btn-reject" 
+                    onClick={handleRejectClick}
+                    disabled={processing}
+                  >
+                    <span>✕</span> Reject Request
+                  </button>
+                </>
+              )}
+              <button className="btn-close" onClick={() => setShowRequestModal(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Reason Modal */}
+      {showRejectModal && (
+        <div className="modal-overlay" onClick={() => setShowRejectModal(false)}>
+          <div className="modal-content reject-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Reject Request</h3>
+              <button className="modal-close" onClick={() => setShowRejectModal(false)}>✕</button>
+            </div>
+
+            <div className="modal-body">
+              <div className="reject-info">
+                <div className="reject-student">
+                  <span className="reject-label">Student:</span>
+                  <strong>{selectedRequest?.studentName}</strong>
+                </div>
+                <div className="reject-student">
+                  <span className="reject-label">Matric:</span>
+                  <span>{selectedRequest?.matricNumber}</span>
+                </div>
+                <div className="reject-student">
+                  <span className="reject-label">Courses:</span>
+                  <span>{selectedRequest?.courses?.length} course(s)</span>
+                </div>
+              </div>
+
               <div className="form-group">
-                <label>
-                  {actionType === 'approve' ? 'Comment (Optional)' : 'Reason for Rejection *'}
-                </label>
+                <label>Reason for Rejection *</label>
                 <textarea
-                  placeholder={
-                    actionType === 'approve' 
-                      ? 'Add any notes about this approval...' 
-                      : 'Explain why this request is being rejected...'
-                  }
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  rows="4"
+                  placeholder="Please explain why this request is being rejected. This will help the student understand what corrections to make..."
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  rows="5"
                 />
+                <small className="field-hint">
+                  This reason will be sent to the student for their reference.
+                </small>
               </div>
             </div>
 
             <div className="modal-footer">
-              <button className="btn-cancel" onClick={() => setShowModal(false)}>
+              <button className="btn-cancel" onClick={() => setShowRejectModal(false)}>
                 Cancel
               </button>
               <button 
-                className={actionType === 'approve' ? 'btn-submit-approve' : 'btn-submit-reject'}
-                onClick={handleSubmitAction}
+                className="btn-submit-reject" 
+                onClick={handleRejectConfirm}
+                disabled={processing || !rejectReason.trim()}
               >
-                {actionType === 'approve' ? 'Confirm Approval' : 'Confirm Rejection'}
+                {processing ? 'Processing...' : 'Confirm Rejection'}
               </button>
             </div>
           </div>
