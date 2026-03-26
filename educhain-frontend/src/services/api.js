@@ -367,6 +367,39 @@ const API = {
     }
   },
 
+  // ========== ADMIN RESULTS MANAGEMENT ==========
+  getCompletedRequests: async () => {
+    try {
+      const response = await apiClient.get('/result-requests/admin/completed');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching completed requests:', error);
+      return { requests: [] };
+    }
+  },
+
+  publishResultToBlockchain: async (requestId) => {
+    try {
+      const response = await apiClient.post(`/result-requests/${requestId}/publish-blockchain`);
+      return response.data;
+    } catch (error) {
+      console.error('Error publishing to blockchain:', error);
+      throw error;
+    }
+  },
+
+  verifyResultOnBlockchain: async (studentId, courseCode, score, grade, timestamp) => {
+    try {
+      const response = await apiClient.post('/blockchain/verify', {
+        studentId, courseCode, score, grade, timestamp
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error verifying on blockchain:', error);
+      return { verified: false };
+    }
+  },
+
   // ========== HELPER ==========
   mapStatusToDisplay: (backendStatus) => {
     const statusMap = {
