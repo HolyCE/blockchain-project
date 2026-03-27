@@ -252,6 +252,7 @@ const Login = ({ onLogin }) => {
 
               <div className="form-group">
                 <label>Faculty *</label>
+                
                 <select
                   name="faculty"
                   value={signUpData.faculty}
