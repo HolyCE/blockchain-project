@@ -98,7 +98,6 @@ const AdminResults = () => {
     <div className="admin-results-container">
       <ToastContainer toasts={toasts} removeToast={removeToast} />
       
-      {/* Header */}
       <div className="results-header">
         <div>
           <h2>Published Results</h2>
@@ -110,7 +109,6 @@ const AdminResults = () => {
         </div>
       </div>
 
-      {/* Stats Cards */}
       <div className="stats-cards">
         <div className="stat-card">
           <span className="stat-icon">📋</span>
@@ -135,7 +133,6 @@ const AdminResults = () => {
         </div>
       </div>
 
-      {/* Results List - Card based, mobile first */}
       {results.length === 0 ? (
         <div className="empty-state">
           <div>📭</div>
@@ -195,54 +192,123 @@ const AdminResults = () => {
         </div>
       )}
 
-      {/* Modal for Details */}
+      {/* Modern Modal Design */}
       {selectedResult && (
         <div className="modal-overlay" onClick={() => setSelectedResult(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Result Details</h3>
-              <button className="modal-close" onClick={() => setSelectedResult(null)}>×</button>
-            </div>
-            <div className="modal-body">
-              <div className="detail-section">
-                <h4>Student Information</h4>
-                <p><strong>Name:</strong> {selectedResult.studentName}</p>
-                <p><strong>Matric:</strong> {selectedResult.matricNumber}</p>
-                <p><strong>Department:</strong> {selectedResult.department}</p>
-                <p><strong>Session:</strong> {selectedResult.academicSession} - {selectedResult.semester}</p>
+          <div className="modern-modal" onClick={e => e.stopPropagation()}>
+            {/* Modal Header with Gradient */}
+            <div className="modal-gradient-header">
+              <div className="modal-header-content">
+                <div className="modal-icon">🎓</div>
+                <div>
+                  <h2>Academic Transcript</h2>
+                  <p>Student Result Details</p>
+                </div>
+                <button className="modal-close-btn" onClick={() => setSelectedResult(null)}>×</button>
               </div>
-              
-              <div className="detail-section">
-                <h4>Courses ({selectedResult.courses?.length || 0})</h4>
-                <div className="courses-list">
+            </div>
+
+            <div className="modal-body-modern">
+              {/* Student Profile Card */}
+              <div className="student-profile-card">
+                <div className="profile-avatar">{selectedResult.studentName?.charAt(0) || 'S'}</div>
+                <div className="profile-info">
+                  <h3>{selectedResult.studentName}</h3>
+                  <div className="profile-details">
+                    <span className="profile-badge">📋 {selectedResult.matricNumber}</span>
+                    <span className="profile-badge">🏛️ {selectedResult.department}</span>
+                    <span className="profile-badge">📅 {selectedResult.academicSession}</span>
+                    <span className="profile-badge">📖 {selectedResult.semester} Semester</span>
+                  </div>
+                </div>
+                <div className="gpa-large-card" style={{ background: getGPAColor(selectedResult.finalResult?.gpa) }}>
+                  <span className="gpa-label">GPA</span>
+                  <span className="gpa-value">{selectedResult.finalResult?.gpa || 'N/A'}</span>
+                </div>
+              </div>
+
+              {/* Courses Section */}
+              <div className="courses-section-modern">
+                <div className="section-title">
+                  <span className="title-icon">📚</span>
+                  <h3>Course Results</h3>
+                  <span className="course-count">{selectedResult.courses?.length || 0} courses</span>
+                </div>
+                
+                <div className="courses-grid-modern">
                   {selectedResult.courses?.map((c, i) => (
-                    <div key={i} className="course-item">
-                      <div className="course-code">{c.courseCode}</div>
-                      <div className="course-title">{c.courseTitle}</div>
-                      <div className="course-grade">
-                        <span>Score: {c.score || 'N/A'}</span>
-                        <span>Grade: {c.grade || 'N/A'}</span>
-                        <span>GP: {c.gradePoint || 'N/A'}</span>
+                    <div key={i} className="course-card-modern">
+                      <div className="course-header">
+                        <span className="course-code">{c.courseCode}</span>
+                        <span className={`grade-badge-modern grade-${c.grade?.toLowerCase() || 'pending'}`}>
+                          {c.grade || 'PENDING'}
+                        </span>
+                      </div>
+                      <div className="course-title-modern">{c.courseTitle}</div>
+                      <div className="course-stats">
+                        <div className="stat-item">
+                          <span className="stat-label-small">Credits</span>
+                          <span className="stat-value-small">{c.creditUnits}</span>
+                        </div>
+                        <div className="stat-item">
+                          <span className="stat-label-small">Score</span>
+                          <span className="stat-value-small">{c.score || 'N/A'}</span>
+                        </div>
+                        <div className="stat-item">
+                          <span className="stat-label-small">Grade Point</span>
+                          <span className="stat-value-small">{c.gradePoint || 'N/A'}</span>
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
-                <div className="total-gpa">
-                  <strong>Total Credits: {selectedResult.finalResult?.totalCredits}</strong>
-                  <strong>GPA: {selectedResult.finalResult?.gpa}</strong>
+
+                {/* Summary Card */}
+                <div className="summary-card">
+                  <div className="summary-item">
+                    <span className="summary-label">Total Credits</span>
+                    <span className="summary-value">{selectedResult.finalResult?.totalCredits || 0}</span>
+                  </div>
+                  <div className="summary-divider"></div>
+                  <div className="summary-item">
+                    <span className="summary-label">Total Points</span>
+                    <span className="summary-value">{selectedResult.finalResult?.totalPoints || 0}</span>
+                  </div>
+                  <div className="summary-divider"></div>
+                  <div className="summary-item">
+                    <span className="summary-label">GPA</span>
+                    <span className="summary-value highlight" style={{ color: getGPAColor(selectedResult.finalResult?.gpa) }}>
+                      {selectedResult.finalResult?.gpa || 'N/A'}
+                    </span>
+                  </div>
                 </div>
               </div>
 
+              {/* Blockchain Verification Section */}
               {selectedResult.blockchainHash && (
-                <div className="blockchain-verification">
-                  <h4>🔗 Blockchain Verification</h4>
-                  <code>{selectedResult.blockchainHash}</code>
-                  <p><strong>Published:</strong> {new Date(selectedResult.verificationDate).toLocaleString()}</p>
+                <div className="blockchain-section-modern">
+                  <div className="section-title">
+                    <span className="title-icon">🔗</span>
+                    <h3>Blockchain Verification</h3>
+                    <span className="verified-badge-modern">✓ Verified</span>
+                  </div>
+                  <div className="blockchain-details-modern">
+                    <div className="hash-container">
+                      <span className="hash-label">Transaction Hash</span>
+                      <code className="hash-code-modern">{selectedResult.blockchainHash}</code>
+                    </div>
+                    <div className="verification-date">
+                      <span>📅 Published: {new Date(selectedResult.verificationDate).toLocaleString()}</span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
-            <div className="modal-footer">
-              <button className="btn-close" onClick={() => setSelectedResult(null)}>Close</button>
+
+            <div className="modal-footer-modern">
+              <button className="btn-close-modern" onClick={() => setSelectedResult(null)}>
+                Close
+              </button>
             </div>
           </div>
         </div>
