@@ -1,3 +1,4 @@
+import LoadingSpinner from "./LoadingSpinner";
 import React, { useState, useEffect } from 'react';
 import API from '../services/api';
 import StatCard from './StatCard';
@@ -66,7 +67,7 @@ const StudentDashboard = ({ user, onRequestSubmitted }) => {
     setShowDetailsModal(true);
   };
 
-  if (loading) return <div className="loading">Loading dashboard...</div>;
+  if (loading) return <LoadingSpinner message="Loading your dashboard..." />;
 
   return (
     <div className="student-dashboard">

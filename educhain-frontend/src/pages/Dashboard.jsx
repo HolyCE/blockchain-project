@@ -1,4 +1,3 @@
-import LoadingSpinner from "../components/LoadingSpinner";
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import StatCard from '../components/StatCard';
@@ -7,6 +6,7 @@ import LecturerGrading from '../components/LecturerGrading';
 import StudentDashboard from '../components/StudentDashboard';
 import UploadedResults from '../components/UploadedResults';
 import AdminResults from '../components/AdminResults';
+import LoadingSpinner from '../components/LoadingSpinner';
 import API from '../services/api';
 import '../styles/Dashboard.css';
 
@@ -19,6 +19,7 @@ const Dashboard = ({ user, onLogout }) => {
   const [notifications, setNotifications] = useState([]);
   const [blockchainStatus, setBlockchainStatus] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [sectionLoading, setSectionLoading] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [levelFilter, setLevelFilter] = useState('all');
@@ -27,36 +28,74 @@ const Dashboard = ({ user, onLogout }) => {
     loadDashboardData();
   }, []);
 
+  // Reload data when tab changes
+  useEffect(() => {
+    if (!loading) {
+      loadSectionData();
+    }
+  }, [activeTab]);
+
   const loadDashboardData = async () => {
     setLoading(true);
     try {
       const statsData = await API.getDashboardStats();
       setDashboardData(statsData);
-      
+      await loadSectionData();
+    } catch (error) {
+      console.error('Error loading dashboard:', error);
+    }
+    setLoading(false);
+  };
+
+  const loadSectionData = async () => {
+    setSectionLoading(true);
+    try {
       if (user.role === 'student') {
-        setRequests(await API.getStudentRequests());
-        setCourses(await API.getDepartmentCourses(user.department, user.level));
+        if (activeTab === 'dashboard' || activeTab === 'requests') {
+          setRequests(await API.getStudentRequests());
+        }
+        if (activeTab === 'dashboard' || activeTab === 'courses') {
+          setCourses(await API.getDepartmentCourses(user.department, user.level));
+        }
       } else if (user.role === 'lecturer') {
-        setRequests(await API.getLecturerPendingRequests());
-        setCourses(await API.getLecturerCourses());
+        if (activeTab === 'dashboard' || activeTab === 'requests') {
+          setRequests(await API.getLecturerPendingRequests());
+        }
+        if (activeTab === 'dashboard' || activeTab === 'courses') {
+          setCourses(await API.getLecturerCourses());
+        }
       } else if (user.role === 'hod') {
-        setRequests(await API.getHODPendingRequests());
-        const departmentStudents = await API.getDepartmentStudents(user.department);
-        setStudents(departmentStudents);
-        setCourses(await API.getDepartmentCourses(user.department));
-    console.log("Courses loaded for", user.department, ":", courses);
+        if (activeTab === 'dashboard' || activeTab === 'requests') {
+          setRequests(await API.getHODPendingRequests());
+        }
+        if (activeTab === 'dashboard' || activeTab === 'students') {
+          const departmentStudents = await API.getDepartmentStudents(user.department);
+          setStudents(departmentStudents);
+        }
+        if (activeTab === 'dashboard' || activeTab === 'courses') {
+          setCourses(await API.getDepartmentCourses(user.department));
+        }
       } else if (user.role === 'course_advisor') {
-        setRequests(await API.getAdvisorPendingRequests());
-        setCourses(await API.getDepartmentCourses(user.department));
-    console.log("Courses loaded for", user.department, ":", courses);
+        if (activeTab === 'dashboard' || activeTab === 'requests') {
+          setRequests(await API.getAdvisorPendingRequests());
+        }
+        if (activeTab === 'dashboard' || activeTab === 'courses') {
+          setCourses(await API.getDepartmentCourses(user.department));
+        }
       } else if (user.role === 'school_officer') {
-        setRequests(await API.getSchoolOfficerPendingRequests());
-        setCourses([]);
-        setStudents([]);
+        if (activeTab === 'dashboard' || activeTab === 'requests') {
+          setRequests(await API.getSchoolOfficerPendingRequests());
+        }
       } else if (user.role === 'admin') {
-        setRequests(await API.getAdminRequests());
-        setStudents(await API.getAllStudents());
-        setCourses(await API.getAllCourses());
+        if (activeTab === 'dashboard' || activeTab === 'requests') {
+          setRequests(await API.getAdminRequests());
+        }
+        if (activeTab === 'dashboard' || activeTab === 'students') {
+          setStudents(await API.getAllStudents());
+        }
+        if (activeTab === 'dashboard' || activeTab === 'courses') {
+          setCourses(await API.getAllCourses());
+        }
       }
       
       const notifData = await API.getNotifications(true);
@@ -66,9 +105,9 @@ const Dashboard = ({ user, onLogout }) => {
       setBlockchainStatus(bcStatus);
       
     } catch (error) {
-      console.error('Error loading dashboard:', error);
+      console.error('Error loading section data:', error);
     }
-    setLoading(false);
+    setSectionLoading(false);
   };
 
   const handleTabChange = (tab) => {
@@ -123,7 +162,6 @@ const Dashboard = ({ user, onLogout }) => {
   const getAvailableTabs = () => {
     const tabs = [{ id: 'dashboard', label: 'Dashboard', icon: '📊' }];
     
-    // Admin gets all tabs
     if (user.role === 'admin') {
       tabs.push({ id: 'requests', label: 'All Requests', icon: '📋' });
       tabs.push({ id: 'students', label: 'All Students', icon: '👥' });
@@ -133,36 +171,47 @@ const Dashboard = ({ user, onLogout }) => {
       return tabs;
     }
     
-    // For non-admin users
     if (user.role !== 'student') {
       tabs.push({ id: 'requests', label: 'Requests', icon: '📋' });
     }
     
     if (user.role === 'student') {
       tabs.push({ id: 'uploaded', label: 'Uploaded Results', icon: '📄' });
+      tabs.push({ id: 'courses', label: 'My Courses', icon: '📚' });
+      return tabs;
     }
     
     if (user.role === 'lecturer') {
       tabs.push({ id: 'grading', label: 'Grading', icon: '✏️' });
+      tabs.push({ id: 'courses', label: 'My Courses', icon: '📚' });
+      return tabs;
     }
     
-    if (user.role !== 'school_officer' && user.role !== 'admin') {
-      tabs.push({ id: 'courses', label: 'Courses', icon: '📚' });
+    if (user.role === 'hod') {
+      tabs.push({ id: 'requests', label: 'Department Requests', icon: '📋' });
+      tabs.push({ id: 'students', label: 'Department Students', icon: '👥' });
+      tabs.push({ id: 'courses', label: 'Department Courses', icon: '📚' });
+      return tabs;
     }
     
-    if (user.role === 'hod' || user.role === 'admin') {
-      tabs.push({ id: 'students', label: 'Students', icon: '👥' });
+    if (user.role === 'course_advisor') {
+      tabs.push({ id: 'requests', label: 'Pending Reviews', icon: '📋' });
+      tabs.push({ id: 'courses', label: 'Department Courses', icon: '📚' });
+      return tabs;
+    }
+    
+    if (user.role === 'school_officer') {
+      tabs.push({ id: 'requests', label: 'Pending Approvals', icon: '📋' });
+      return tabs;
     }
     
     return tabs;
   };
 
-  if (loading) return (
-    <div className="loading-screen">
-      <div className="spinner"></div>
-      <p>Loading dashboard...</p>
-    </div>
-  );
+  // Show main loading spinner after login
+  if (loading) {
+    return <LoadingSpinner message="Loading your dashboard..." />;
+  }
 
   return (
     <div className="app-container">
@@ -250,226 +299,247 @@ const Dashboard = ({ user, onLogout }) => {
           </div>
         </div>
 
-        {/* Dashboard Tab */}
-        {activeTab === 'dashboard' && (
+        {/* Show section loading spinner when switching tabs */}
+        {sectionLoading ? (
+          <LoadingSpinner message={`Loading ${activeTab === 'dashboard' ? 'dashboard' : activeTab}...`} />
+        ) : (
           <>
-            {user.role === 'student' && (
-              <StudentDashboard 
-                user={user} 
-                stats={stats} 
-                courses={courses} 
-                onRequestSubmitted={loadDashboardData}
-              />
+            {/* Dashboard Tab */}
+            {activeTab === 'dashboard' && (
+              <>
+                {user.role === 'student' && (
+                  <StudentDashboard 
+                    user={user} 
+                    stats={stats} 
+                    courses={courses} 
+                    onRequestSubmitted={loadSectionData}
+                  />
+                )}
+
+                {user.role !== 'student' && (
+                  <div className="stats-grid">
+                    {user.role === 'lecturer' && (
+                      <>
+                        <StatCard label="Pending Grading" value={requests.length} subtext={`${courses.length} assigned courses`} color="#f59e0b" />
+                        <StatCard label="My Courses" value={courses.length} subtext="Assigned to teach" color="#8b5cf6" />
+                        <StatCard label="Completed Grading" value={stats.totalGraded || 0} subtext={`${stats.completionRate || 0}% complete`} color="#10b981" />
+                      </>
+                    )}
+                    
+                    {user.role === 'hod' && (
+                      <>
+                        <StatCard label="Department Requests" value={requests.length} subtext="Pending review" color="#f59e0b" />
+                        <StatCard label="Department Students" value={students.length} subtext="Active students" color="#3b82f6" />
+                        <StatCard label="Department Courses" value={courses.length} subtext="Active courses" color="#8b5cf6" />
+                        <StatCard label="Completion Rate" value={`${stats.completionRate || 0}%`} subtext="Department average" color="#10b981" />
+                      </>
+                    )}
+                    
+                    {user.role === 'course_advisor' && (
+                      <>
+                        <StatCard label="Pending Review" value={requests.length} subtext="Awaiting assignment" color="#f59e0b" />
+                        <StatCard label="Department Courses" value={courses.length} subtext="Active courses" color="#8b5cf6" />
+                        <StatCard label="Auto-Assigned" value={stats.autoAssigned || 0} subtext="Courses assigned" color="#10b981" />
+                      </>
+                    )}
+                    
+                    {user.role === 'school_officer' && (
+                      <>
+                        <StatCard label="Pending Requests" value={requests.length} subtext="Awaiting review" color="#f59e0b" />
+                        <StatCard label="Total Processed" value={stats.totalProcessed || 0} subtext="This semester" color="#10b981" />
+                        <StatCard label="Active Students" value={stats.totalStudents || 0} subtext="Across departments" color="#3b82f6" />
+                        <StatCard label="Review Rate" value={`${stats.reviewRate || 0}%`} subtext="Completion rate" color="#8b5cf6" />
+                      </>
+                    )}
+                    
+                    {user.role === 'admin' && (
+                      <>
+                        <StatCard label="Total Students" value={students.length} subtext="All departments" color="#3b82f6" />
+                        <StatCard label="Total Courses" value={courses.length} subtext="Active courses" color="#8b5cf6" />
+                        <StatCard label="Total Requests" value={stats.totalRequests || 0} subtext={`${stats.pendingRequests || 0} pending`} color="#f59e0b" />
+                        <StatCard label="Blockchain" value={blockchainStatus?.connected ? "Connected" : "Offline"} subtext={blockchainStatus?.connected ? "Active" : "Check Ganache"} color={blockchainStatus?.connected ? "#10b981" : "#ef4444"} />
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {(user.role === 'school_officer' || user.role === 'hod' || user.role === 'course_advisor') && requests.length > 0 && (
+                  <div className="quick-actions">
+                    <div className="quick-action-card">
+                      <div className="quick-action-icon">
+                        {user.role === 'school_officer' ? '📋' : user.role === 'hod' ? '👨‍🏫' : '🤖'}
+                      </div>
+                      <div className="quick-action-content">
+                        <h4>
+                          {user.role === 'school_officer' ? 'Quick Review' : 
+                           user.role === 'hod' ? 'Department Review' : 
+                           'Auto-Assignment Ready'}
+                        </h4>
+                        <p>You have {requests.length} pending request{requests.length !== 1 ? 's' : ''}</p>
+                        <button className="quick-action-btn" onClick={() => handleTabChange('requests')}>
+                          {user.role === 'school_officer' ? 'Review Now →' : 
+                           user.role === 'hod' ? 'Review & Forward →' : 
+                           'Auto-Assign Now →'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {user.role === 'lecturer' && requests.length > 0 && (
+                  <div className="quick-actions">
+                    <div className="quick-action-card" style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)' }}>
+                      <div className="quick-action-icon">✏️</div>
+                      <div className="quick-action-content">
+                        <h4>Grading Tasks</h4>
+                        <p>You have {requests.length} grading task{requests.length !== 1 ? 's' : ''}</p>
+                        <button className="quick-action-btn" onClick={() => handleTabChange('grading')}>
+                          Grade Now →
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
-            {user.role !== 'student' && (
-              <div className="stats-grid">
-                {user.role === 'lecturer' && (
-                  <>
-                    <StatCard label="Pending Grading" value={requests.length} subtext={`${courses.length} assigned courses`} color="#f59e0b" />
-                    <StatCard label="My Courses" value={courses.length} subtext="Assigned to teach" color="#8b5cf6" />
-                    <StatCard label="Completed Grading" value={stats.totalGraded || 0} subtext={`${stats.completionRate || 0}% complete`} color="#10b981" />
-                  </>
-                )}
-                
-                {user.role === 'hod' && (
-                  <>
-                    <StatCard label="Department Requests" value={requests.length} subtext="Pending review" color="#f59e0b" />
-                    <StatCard label="Department Students" value={students.length} subtext="Active students" color="#3b82f6" />
-                    <StatCard label="Department Courses" value={courses.length} subtext="Active courses" color="#8b5cf6" />
-                    <StatCard label="Completion Rate" value={`${stats.completionRate || 0}%`} subtext="Department average" color="#10b981" />
-                  </>
-                )}
-                
-                {user.role === 'course_advisor' && (
-                  <>
-                    <StatCard label="Pending Review" value={requests.length} subtext="Awaiting assignment" color="#f59e0b" />
-                    <StatCard label="Department Courses" value={courses.length} subtext="Active courses" color="#8b5cf6" />
-                    <StatCard label="Auto-Assigned" value={stats.autoAssigned || 0} subtext="Courses assigned" color="#10b981" />
-                  </>
-                )}
-                
-                {user.role === 'school_officer' && (
-                  <>
-                    <StatCard label="Pending Requests" value={requests.length} subtext="Awaiting review" color="#f59e0b" />
-                    <StatCard label="Total Processed" value={stats.totalProcessed || 0} subtext="This semester" color="#10b981" />
-                    <StatCard label="Active Students" value={stats.totalStudents || 0} subtext="Across departments" color="#3b82f6" />
-                    <StatCard label="Review Rate" value={`${stats.reviewRate || 0}%`} subtext="Completion rate" color="#8b5cf6" />
-                  </>
-                )}
-                
-                {user.role === 'admin' && (
-                  <>
-                    <StatCard label="Total Students" value={students.length} subtext="All departments" color="#3b82f6" />
-                    <StatCard label="Total Courses" value={courses.length} subtext="Active courses" color="#8b5cf6" />
-                    <StatCard label="Total Requests" value={stats.totalRequests || 0} subtext={`${stats.pendingRequests || 0} pending`} color="#f59e0b" />
-                    <StatCard label="Blockchain" value={blockchainStatus?.connected ? "Connected" : "Offline"} subtext={blockchainStatus?.connected ? "Active" : "Check Ganache"} color={blockchainStatus?.connected ? "#10b981" : "#ef4444"} />
-                  </>
+            {/* Requests Tab */}
+            {activeTab === 'requests' && (
+              <RequestManagement userRole={user.role} userId={user.id} />
+            )}
+
+            {/* Grading Tab */}
+            {activeTab === 'grading' && user.role === 'lecturer' && (
+              <LecturerGrading userId={user.id} />
+            )}
+
+            {/* Uploaded Results Tab */}
+            {activeTab === 'uploaded' && user.role === 'student' && (
+              <UploadedResults userId={user.id} />
+            )}
+
+            {/* Published Results Tab (Admin Only) */}
+            {activeTab === 'published-results' && user.role === 'admin' && (
+              <AdminResults />
+            )}
+
+            {/* Courses Tab */}
+            {activeTab === 'courses' && user.role !== 'school_officer' && (
+              <div className="courses-section">
+                <h3>📚 Courses {courses.length > 0 ? `(${courses.length})` : ""}</h3>
+                {courses.length === 0 ? (
+                  <div className="empty-state">
+                    <div>📖</div>
+                    <h4>No Courses Found</h4>
+                    <p>
+                      {user.role === "lecturer" 
+                        ? "You haven't been assigned to any courses yet." 
+                        : user.department 
+                          ? `No courses found for ${user.department} department.` 
+                          : "Your department is not set. Please contact administrator."}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="courses-grid">
+                    {courses.map(course => (
+                      <div key={course.code || course._id} className="course-card">
+                        <div className="course-code">{course.code || course.courseCode}</div>
+                        <div className="course-title">{course.title || course.courseTitle}</div>
+                        <div className="course-details">
+                          {(course.creditUnits || course.credits)} credits • Level {course.level || course.courseLevel} • {course.semester} Semester
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             )}
 
-            {(user.role === 'school_officer' || user.role === 'hod' || user.role === 'course_advisor') && requests.length > 0 && (
-              <div className="quick-actions">
-                <div className="quick-action-card">
-                  <div className="quick-action-icon">
-                    {user.role === 'school_officer' ? '📋' : user.role === 'hod' ? '👨‍🏫' : '🤖'}
-                  </div>
-                  <div className="quick-action-content">
-                    <h4>
-                      {user.role === 'school_officer' ? 'Quick Review' : 
-                       user.role === 'hod' ? 'Department Review' : 
-                       'Auto-Assignment Ready'}
-                    </h4>
-                    <p>You have {requests.length} pending request{requests.length !== 1 ? 's' : ''}</p>
-                    <button className="quick-action-btn" onClick={() => handleTabChange('requests')}>
-                      {user.role === 'school_officer' ? 'Review Now →' : 
-                       user.role === 'hod' ? 'Review & Forward →' : 
-                       'Auto-Assign Now →'}
-                    </button>
+            {/* Students Tab */}
+            {activeTab === 'students' && (user.role === 'hod' || user.role === 'admin') && (
+              <div className="students-section">
+                <div className="section-header">
+                  <h3>Department Students - {user.department || 'All Departments'}</h3>
+                  <div className="header-actions">
+                    <p className="section-subtitle">Total: {filteredStudents.length} students</p>
+                    {students.length > 0 && (
+                      <button className="export-btn" onClick={exportStudentsToCSV}>
+                        📊 Export to CSV
+                      </button>
+                    )}
                   </div>
                 </div>
+
+                <div className="students-search">
+                  <input
+                    type="text"
+                    placeholder="Search by name, matric number or email..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="search-input"
+                  />
+                  <select 
+                    value={levelFilter} 
+                    onChange={(e) => setLevelFilter(e.target.value)}
+                    className="filter-select"
+                  >
+                    <option value="all">All Levels</option>
+                    <option value="100">100 Level</option>
+                    <option value="200">200 Level</option>
+                    <option value="300">300 Level</option>
+                    <option value="400">400 Level</option>
+                    <option value="500">500 Level</option>
+                    <option value="600">600 Level</option>
+                  </select>
+                </div>
+
+                {filteredStudents.length === 0 ? (
+                  <p className="no-data">No students found</p>
+                ) : (
+                  <div className="students-list">
+                    {filteredStudents.map((student, index) => (
+                      <div key={student._id} className="student-card">
+                        <div className="student-rank">{index + 1}</div>
+                        <div className="student-info">
+                          <div className="student-name">
+                            <div className="name-initial">{student.firstName?.[0]}{student.lastName?.[0]}</div>
+                            <span>{student.fullName || `${student.firstName} ${student.lastName}`}</span>
+                          </div>
+                          <div className="student-details">
+                            <span className="student-matric">{student.matricNumber}</span>
+                            <span className="student-level">Level {student.level}</span>
+                            <span className="student-email">{student.email}</span>
+                            <span className="student-phone">{student.phoneNumber || '-'}</span>
+                          </div>
+                        </div>
+                        <div className="student-status">
+                          <span className={`status-badge ${student.isActive ? 'active' : 'inactive'}`}>
+                            {student.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
-            {user.role === 'lecturer' && requests.length > 0 && (
-              <div className="quick-actions">
-                <div className="quick-action-card" style={{ background: 'linear-gradient(135deg, #8b5cf6, #6d28d9)' }}>
-                  <div className="quick-action-icon">✏️</div>
-                  <div className="quick-action-content">
-                    <h4>Grading Tasks</h4>
-                    <p>You have {requests.length} grading task{requests.length !== 1 ? 's' : ''}</p>
-                    <button className="quick-action-btn" onClick={() => handleTabChange('grading')}>
-                      Grade Now →
-                    </button>
+            {/* Blockchain Tab (Admin Only) */}
+            {activeTab === 'blockchain' && user.role === 'admin' && (
+              <div className="blockchain-section">
+                <h3>Blockchain Status</h3>
+                <div className={`blockchain-status-card ${blockchainStatus?.connected ? 'connected' : 'disconnected'}`}>
+                  <div className="status-indicator">
+                    {blockchainStatus?.connected ? '🟢 Connected' : '🔴 Disconnected'}
+                  </div>
+                  <div className="status-details">
+                    <p><strong>Network:</strong> {blockchainStatus?.network || 'Ganache'}</p>
+                    <p><strong>Address:</strong> {blockchainStatus?.address || 'http://127.0.0.1:7545'}</p>
                   </div>
                 </div>
               </div>
             )}
           </>
-        )}
-
-        {/* Requests Tab */}
-        {activeTab === 'requests' && (
-          <RequestManagement userRole={user.role} userId={user.id} />
-        )}
-
-        {/* Grading Tab */}
-        {activeTab === 'grading' && user.role === 'lecturer' && (
-          <LecturerGrading userId={user.id} />
-        )}
-
-        {/* Uploaded Results Tab */}
-        {activeTab === 'uploaded' && user.role === 'student' && (
-          <UploadedResults userId={user.id} />
-        )}
-
-        {/* Published Results Tab (Admin Only) */}
-        {activeTab === 'published-results' && user.role === 'admin' && (
-          <AdminResults />
-        )}
-
-        {/* Courses Tab */}
-        {activeTab === 'courses' && user.role !== 'school_officer' && (
-          <div className="courses-section">
-            <h3>Courses</h3>
-            <div className="courses-grid">
-              {courses.slice(0, 20).map(course => (
-                <div key={course.code} className="course-card">
-                  <div className="course-code">{course.code}</div>
-                  <div className="course-title">{course.title}</div>
-                  <div className="course-details">
-                    {course.creditUnits} credits • Level {course.level} • {course.semester} Semester
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Students Tab */}
-        {activeTab === 'students' && (user.role === 'hod' || user.role === 'admin') && (
-          <div className="students-section">
-            <div className="section-header">
-              <h3>Department Students - {user.department || 'All Departments'}</h3>
-              <div className="header-actions">
-                <p className="section-subtitle">Total: {filteredStudents.length} students</p>
-                {students.length > 0 && (
-                  <button className="export-btn" onClick={exportStudentsToCSV}>
-                    📊 Export to CSV
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="students-search">
-              <input
-                type="text"
-                placeholder="Search by name, matric number or email..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="search-input"
-              />
-              <select 
-                value={levelFilter} 
-                onChange={(e) => setLevelFilter(e.target.value)}
-                className="filter-select"
-              >
-                <option value="all">All Levels</option>
-                <option value="100">100 Level</option>
-                <option value="200">200 Level</option>
-                <option value="300">300 Level</option>
-                <option value="400">400 Level</option>
-                <option value="500">500 Level</option>
-                <option value="600">600 Level</option>
-              </select>
-            </div>
-
-            {filteredStudents.length === 0 ? (
-              <p className="no-data">No students found</p>
-            ) : (
-              <div className="students-list">
-                {filteredStudents.map((student, index) => (
-                  <div key={student._id} className="student-card">
-                    <div className="student-rank">{index + 1}</div>
-                    <div className="student-info">
-                      <div className="student-name">
-                        <div className="name-initial">{student.firstName?.[0]}{student.lastName?.[0]}</div>
-                        <span>{student.fullName || `${student.firstName} ${student.lastName}`}</span>
-                      </div>
-                      <div className="student-details">
-                        <span className="student-matric">{student.matricNumber}</span>
-                        <span className="student-level">Level {student.level}</span>
-                        <span className="student-email">{student.email}</span>
-                        <span className="student-phone">{student.phoneNumber || '-'}</span>
-                      </div>
-                    </div>
-                    <div className="student-status">
-                      <span className={`status-badge ${student.isActive ? 'active' : 'inactive'}`}>
-                        {student.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Blockchain Tab (Admin Only) */}
-        {activeTab === 'blockchain' && user.role === 'admin' && (
-          <div className="blockchain-section">
-            <h3>Blockchain Status</h3>
-            <div className={`blockchain-status-card ${blockchainStatus?.connected ? 'connected' : 'disconnected'}`}>
-              <div className="status-indicator">
-                {blockchainStatus?.connected ? '🟢 Connected' : '🔴 Disconnected'}
-              </div>
-              <div className="status-details">
-                <p><strong>Network:</strong> {blockchainStatus?.network || 'Ganache'}</p>
-                <p><strong>Address:</strong> {blockchainStatus?.address || 'http://127.0.0.1:7545'}</p>
-              </div>
-            </div>
-          </div>
         )}
       </div>
     </div>

@@ -1,3 +1,4 @@
+import LoadingSpinner from "./LoadingSpinner";
 import React, { useState, useEffect, useCallback } from 'react';
 import API from '../services/api';
 import { ToastContainer } from './Toast';
@@ -235,7 +236,7 @@ const RequestManagement = ({ userRole, userId }) => {
     }
   };
 
-  if (loading) return <div className="loading">Loading requests...</div>;
+  if (loading) return <LoadingSpinner message="Loading requests..." />;
 
   return (
     <div className="request-management">

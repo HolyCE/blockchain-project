@@ -1,3 +1,4 @@
+import LoadingSpinner from "./LoadingSpinner";
 import React, { useState, useEffect } from 'react';
 import API from '../services/api';
 import { ToastContainer } from './Toast';
@@ -117,7 +118,7 @@ const LecturerGrading = ({ userId }) => {
     return selectedRequest.coursesToGrade?.every(c => c.status === 'graded');
   };
 
-  if (loading) return <div className="loading">Loading grading tasks...</div>;
+  if (loading) return <LoadingSpinner message="Loading grading tasks..." />;
 
   return (
     <div className="lecturer-grading">
