@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import API from '../services/api';
 import { ToastContainer } from './Toast';
+import LoadingSpinner from './LoadingSpinner';
 import './AdminResults.css';
 
 const AdminResults = () => {
@@ -15,7 +16,7 @@ const AdminResults = () => {
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
-    }, 3000);
+    }, 4000);
   };
 
   const removeToast = (id) => {
@@ -38,15 +39,19 @@ const AdminResults = () => {
   }, [fetchAllResults]);
 
   const publishToBlockchain = async (resultId) => {
-    if (!window.confirm('Publish this result to the blockchain?')) return;
+    if (!window.confirm('📤 Publish this result to the blockchain?\n\nThis action is permanent and cannot be undone.')) {
+      return;
+    }
     
     setPublishing(resultId);
+    addToast('⏳ Publishing to blockchain...', 'info');
+    
     try {
       const response = await API.publishResultToBlockchain(resultId);
-      addToast('Result published successfully!', 'success');
+      addToast(`✅ Success! Result published to blockchain. Hash: ${response.transactionHash.slice(0, 20)}...`, 'success');
       fetchAllResults();
     } catch (error) {
-      addToast('Failed to publish', 'error');
+      addToast(`❌ Failed: ${error.response?.data?.message || error.message}`, 'error');
     } finally {
       setPublishing(null);
     }
@@ -76,7 +81,7 @@ const AdminResults = () => {
     a.download = `results_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    addToast('Exported successfully', 'success');
+    addToast(`📥 Exported ${results.length} results successfully`, 'success');
   };
 
   const getGPAColor = (gpa) => {
@@ -87,11 +92,7 @@ const AdminResults = () => {
   };
 
   if (loading) {
-    return (
-      <div className="admin-results-container">
-        <div className="loading-spinner">Loading...</div>
-      </div>
-    );
+    return <LoadingSpinner message="Loading published results..." />;
   }
 
   return (
@@ -104,8 +105,8 @@ const AdminResults = () => {
           <p>Manage and publish academic results to the blockchain</p>
         </div>
         <div className="header-buttons">
-          <button onClick={exportToCSV} className="btn-export">Export CSV</button>
-          <button onClick={fetchAllResults} className="btn-refresh">Refresh</button>
+          <button onClick={exportToCSV} className="btn-export">📥 Export CSV</button>
+          <button onClick={fetchAllResults} className="btn-refresh">🔄 Refresh</button>
         </div>
       </div>
 
@@ -183,7 +184,7 @@ const AdminResults = () => {
                     onClick={() => publishToBlockchain(result._id)}
                     disabled={publishing === result._id}
                   >
-                    {publishing === result._id ? 'Publishing...' : 'Publish'}
+                    {publishing === result._id ? 'Publishing...' : '📤 Publish'}
                   </button>
                 )}
               </div>
@@ -196,7 +197,6 @@ const AdminResults = () => {
       {selectedResult && (
         <div className="modal-overlay" onClick={() => setSelectedResult(null)}>
           <div className="modern-modal" onClick={e => e.stopPropagation()}>
-            {/* Modal Header with Gradient */}
             <div className="modal-gradient-header">
               <div className="modal-header-content">
                 <div className="modal-icon">🎓</div>
@@ -263,7 +263,6 @@ const AdminResults = () => {
                   ))}
                 </div>
 
-                {/* Summary Card */}
                 <div className="summary-card">
                   <div className="summary-item">
                     <span className="summary-label">Total Credits</span>
@@ -284,7 +283,6 @@ const AdminResults = () => {
                 </div>
               </div>
 
-              {/* Blockchain Verification Section */}
               {selectedResult.blockchainHash && (
                 <div className="blockchain-section-modern">
                   <div className="section-title">

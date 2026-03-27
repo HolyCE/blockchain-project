@@ -1,0 +1,186 @@
+.loading-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.3s ease;
+}
+
+.loading-content {
+  text-align: center;
+}
+
+.loading-animation {
+  background: white;
+  padding: 40px;
+  border-radius: 24px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  animation: scaleIn 0.3s ease;
+}
+
+/* Blockchain Style Loader */
+.blockchain-loader {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.block {
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 4px;
+  animation: chainPulse 1.2s ease-in-out infinite;
+}
+
+.block:nth-child(1) { animation-delay: 0s; }
+.block:nth-child(2) { animation-delay: 0.2s; }
+.block:nth-child(3) { animation-delay: 0.4s; }
+.block:nth-child(4) { animation-delay: 0.6s; }
+
+@keyframes chainPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+.loading-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 16px;
+  color: #64748b;
+}
+
+.loading-message {
+  font-weight: 500;
+}
+
+.loading-dots {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.loading-dots span {
+  animation: bounce 1.4s infinite;
+  opacity: 0;
+}
+
+.loading-dots span:nth-child(1) { animation-delay: 0s; }
+.loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  30% {
+    transform: translateY(-10px);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Skeleton loading for dashboard */
+.skeleton-container {
+  padding: 32px;
+}
+
+.skeleton-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.skeleton-card {
+  background: #f1f5f9;
+  border-radius: 16px;
+  padding: 24px;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-card::before {
+  content: '';
+  display: block;
+  height: 80px;
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 12px;
+}
+
+.skeleton-table {
+  background: #f1f5f9;
+  border-radius: 16px;
+  padding: 20px;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-row {
+  height: 60px;
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  margin-bottom: 12px;
+  border-radius: 8px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .loading-animation {
+    padding: 30px;
+  }
+  
+  .block {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .loading-message {
+    font-size: 14px;
+  }
+}

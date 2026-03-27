@@ -91,3 +91,12 @@
     width: 100%;
   }
 }
+/* Info Toast Style */
+.toast-info {
+  border-left-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.toast-info .toast-icon {
+  color: #3b82f6;
+}

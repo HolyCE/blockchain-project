@@ -1,3 +1,4 @@
+import LoadingSpinner from "../components/LoadingSpinner";
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import StatCard from '../components/StatCard';
@@ -43,9 +44,11 @@ const Dashboard = ({ user, onLogout }) => {
         const departmentStudents = await API.getDepartmentStudents(user.department);
         setStudents(departmentStudents);
         setCourses(await API.getDepartmentCourses(user.department));
+    console.log("Courses loaded for", user.department, ":", courses);
       } else if (user.role === 'course_advisor') {
         setRequests(await API.getAdvisorPendingRequests());
         setCourses(await API.getDepartmentCourses(user.department));
+    console.log("Courses loaded for", user.department, ":", courses);
       } else if (user.role === 'school_officer') {
         setRequests(await API.getSchoolOfficerPendingRequests());
         setCourses([]);
