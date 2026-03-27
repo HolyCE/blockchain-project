@@ -17,6 +17,7 @@ const Sidebar = ({ activeTab, setActiveTab, userRole }) => {
     if (userRole === 'student') {
       return [
         { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+        { id: 'courses', label: 'My Courses', icon: '📚' },
         { id: 'uploaded', label: 'My Results', icon: '📄' }
       ];
     }
